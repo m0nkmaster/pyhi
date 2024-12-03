@@ -2,6 +2,7 @@ from typing import Optional, Callable
 import time
 import pyaudio
 from ..utils.types import AudioConfig, AudioFrame, AudioAnalyzer
+from ..config import AudioRecorderConfig
 
 class PyAudioRecorder:
     def __init__(
@@ -9,42 +10,38 @@ class PyAudioRecorder:
         config: AudioConfig,
         analyzer: AudioAnalyzer,
         on_error: Optional[Callable[[Exception], None]] = None,
-        wake_word_silence_threshold: float = 1.0,
-        response_silence_threshold: float = 2.0,
-        buffer_duration: float = 1.0  # Duration of audio buffer in seconds
+        recorder_config: Optional[AudioRecorderConfig] = None
     ):
         """
         Initialize the PyAudio recorder.
-        
-        Args:
-            config: Audio configuration parameters
-            analyzer: Audio analyzer for speech detection
-            on_error: Optional callback for error handling
-            wake_word_silence_threshold: Seconds of silence before ending wake word detection
-            response_silence_threshold: Seconds of silence before ending response recording
-            buffer_duration: Duration of audio buffer in seconds
         """
+        # Initialize basic attributes first to avoid __del__ errors
+        self.stream = None
+        self.frames = []
+        self.audio_buffer = []
+        
+        # Then initialize the rest
         self.config = config
         self.analyzer = analyzer
         self.on_error = on_error or (lambda e: None)
         self.audio = pyaudio.PyAudio()
-        self.stream: Optional[pyaudio.Stream] = None
-        self.frames: list[bytes] = []
+        
+        # Use provided config or defaults
+        recorder_config = recorder_config or AudioRecorderConfig()
         
         # Speech detection state
-        self.speech_detection_buffer: list[bool] = []
+        self.speech_detection_buffer = []
         self.silence_counter = 0
         self.session_silence_counter = 0
         self.is_recording = False
         
         # Silence thresholds
-        self.wake_word_silence_threshold = wake_word_silence_threshold
-        self.response_silence_threshold = response_silence_threshold
+        self.wake_word_silence_threshold = recorder_config.wake_word_silence_threshold
+        self.response_silence_threshold = recorder_config.response_silence_threshold
         
         # Calculate buffer size in chunks
         chunks_per_second = self.config.sample_rate / self.config.chunk_size
-        self.buffer_size = int(chunks_per_second * buffer_duration)
-        self.audio_buffer: list[bytes] = []
+        self.buffer_size = int(chunks_per_second * recorder_config.buffer_duration)
     
     def start_recording(self) -> None:
         """Start recording audio."""

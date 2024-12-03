@@ -12,8 +12,14 @@ from .audio.recorder import PyAudioRecorder
 from .audio.player import SystemAudioPlayer, AudioPlayerError
 from .wake_word.detector import WhisperWakeWordDetector
 from .conversation.manager import ChatConversationManager
-from .conversation.openai_client import OpenAIWrapper, ChatConfig, TTSConfig
-from .utils.types import AudioConfig
+from .conversation.openai_client import OpenAIWrapper
+from .config import (
+    AudioConfig,
+    AudioRecorderConfig,
+    ChatConfig,
+    TTSConfig,
+    AppConfig
+)
 
 class VoiceAssistant:
     def __init__(self, wake_words: list[str], timeout_seconds: float = 30.0):
@@ -67,12 +73,18 @@ class VoiceAssistant:
             on_error=lambda e: print(f"Audio playback error: {e}")
         )
         
+        # Create recorder config
+        recorder_config = AudioRecorderConfig(
+            wake_word_silence_threshold=1.0,
+            response_silence_threshold=2.0,
+            buffer_duration=1.0
+        )
+        
         self.audio_recorder = PyAudioRecorder(
             config=self.audio_config,
             analyzer=self,  # We implement AudioAnalyzer protocol
             on_error=lambda e: print(f"Recording error: {e}"),
-            wake_word_silence_threshold=1.0,  # Wait for 1 second of silence for wake word
-            response_silence_threshold=2.0     # Wait for 2 seconds of silence for responses
+            recorder_config=recorder_config
         )
         
         # Initialize state
