@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 from config import (
     AUDIO_SAMPLE_RATE, CHANNELS, CHUNK_SIZE, RECORD_SECONDS,
     MODEL_NAME, MAX_TOKENS, REQUEST_TEMPERATURE, RESPONSE_TEMPERATURE,
-    MICROPHONE_NAME, SPEAKER_NAME, THRESHOLD, WAKE_WORDS, TIMEOUT_SECONDS
+    MICROPHONE_NAME, SPEAKER_NAME, THRESHOLD, WAKE_WORDS, TIMEOUT_SECONDS,
+    ACTIVATION_SOUND
 )
 from datetime import datetime, timedelta
 
@@ -32,10 +33,13 @@ class VoiceButton:
         self.conversation_history = []
         
         # Initialize wake word and timeout settings
-        self.wake_words = WAKE_WORDS
+        self.wake_words = [word.lower() for word in WAKE_WORDS]
         self.is_awake = False
         self.last_interaction = None
         self.timeout_seconds = TIMEOUT_SECONDS
+        
+        # Generate activation sound on startup
+        self.generate_activation_sound()
 
     def run(self):
         """Main loop to run the voice button"""
@@ -105,6 +109,7 @@ class VoiceButton:
             print(f"Detected: {transcript}")
             for wake_word in WAKE_WORDS:
                 if wake_word in transcript:
+                    self.play_activation_sound()
                     print("Wake word detected! How can I help you?")
                     return True
         return False
@@ -287,6 +292,30 @@ class VoiceButton:
         has_sufficient_variation = np.std(speech_frequencies) > THRESHOLD/4
         
         return (is_loud_enough and has_speech_frequencies and has_sufficient_variation)
+
+    def generate_activation_sound(self):
+        """Generate a simple activation beep sound"""
+        duration = 0.2  # seconds
+        frequency = 1000  # Hz
+        samples = (np.sin(2 * np.pi * np.arange(duration * self.sample_rate) * frequency / self.sample_rate)).astype(np.float32)
+        
+        # Normalize and convert to 16-bit PCM
+        samples = (samples * 32767).astype(np.int16)
+        
+        # Save as WAV file
+        with wave.open("activation.wav", 'wb') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)  # 2 bytes for 16-bit audio
+            wav_file.setframerate(self.sample_rate)
+            wav_file.writeframes(samples.tobytes())
+
+    def play_activation_sound(self):
+        """Play the activation sound"""
+        try:
+            # Using afplay for macOS which can handle m4a files
+            os.system(f"afplay {ACTIVATION_SOUND}")
+        except Exception as e:
+            print(f"Error playing activation sound: {e}")
 
 if __name__ == "__main__":
     if not os.getenv('OPENAI_API_KEY'):

@@ -19,5 +19,22 @@ MICROPHONE_NAME = "default"
 SPEAKER_NAME = "default"
 
 # Wake Word Configuration
-WAKE_WORDS = ["hey, chat", "hey chat", "hi chat", "hello chat"]
+WAKE_WORDS = [
+    "hey chat",
+    "hey, chat",
+    "hi chat",
+    "hi, chat",
+    "hello chat",
+    "hello, chat",
+    "hey chat bot",
+    "hey chatbot",
+    "hi chatbot",
+    "hello chatbot",
+    "ok chat",
+    "okay chat",
+    "yo chat"
+]
 TIMEOUT_SECONDS = 30
+
+# Sound Configuration
+ACTIVATION_SOUND = "bing.m4a"  # Sound file to play when activated
