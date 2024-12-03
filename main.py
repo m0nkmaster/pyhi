@@ -174,9 +174,9 @@ class VoiceButton:
                             print("\nSession timeout due to no speech...")
                             self.is_awake = False
                             return None
-                        else:
+                        elif not is_recording:  # Only show session timeout when not recording
                             self.display_countdown(self.timeout_seconds - session_silence_duration, 
-                                                "\nSession timeout in: ")
+                                                "Session timeout in: ")
                     
                     if is_recording:
                         frames.append(data)
@@ -184,11 +184,12 @@ class VoiceButton:
                         recording_silence_duration = (silence_counter * self.chunk) / self.sample_rate
                         
                         # Display recording silence countdown
-                        self.display_countdown(RESPONSE_SILENCE_THRESHOLD - recording_silence_duration, 
+                        silence_threshold_seconds = (silence_threshold * self.chunk) / self.sample_rate
+                        self.display_countdown(silence_threshold_seconds - recording_silence_duration, 
                                             "Recording silence: ")
                         
                         # Check if recording should end
-                        if recording_silence_duration >= RESPONSE_SILENCE_THRESHOLD:
+                        if recording_silence_duration >= silence_threshold_seconds:  # Use the passed threshold
                             if len(frames) > silence_threshold:
                                 print("\nRecording complete!")
                                 break
@@ -351,7 +352,13 @@ class VoiceButton:
 
     def display_countdown(self, seconds_left, prefix=""):
         """Display a countdown timer"""
-        sys.stdout.write(f"\r{prefix}{seconds_left:.1f}s remaining...")
+        # Clear the line and display the countdown
+        if prefix.startswith("Recording"):
+            # For recording silence, show on same line
+            sys.stdout.write(f"\r{prefix}{seconds_left:.1f}s remaining...")
+        else:
+            # For session timeout, show on same line with padding
+            sys.stdout.write(f"\r{prefix}{seconds_left:.1f}s remaining...                    ")
         sys.stdout.flush()
 
 if __name__ == "__main__":
