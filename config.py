@@ -9,9 +9,10 @@ RECORD_SECONDS = 5  # Default recording time
 THRESHOLD = 500  # Audio threshold for detecting speech
 
 # ChatGPT Configuration
-MODEL_NAME = "gpt-4"
+MODEL_NAME = "gpt-3.5-turbo"
 MAX_TOKENS = 150
-TEMPERATURE = 0.7
+REQUEST_TEMPERATURE = 0.2
+RESPONSE_TEMPERATURE = 0.7
 
 # Audio Device Names (configure these based on your hardware)
 MICROPHONE_NAME = "default"

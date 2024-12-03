@@ -1,8 +1,14 @@
 import os
 import wave
 import pyaudio
+import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
+from config import (
+    AUDIO_SAMPLE_RATE, CHANNELS, CHUNK_SIZE, RECORD_SECONDS,
+    MODEL_NAME, MAX_TOKENS, REQUEST_TEMPERATURE, RESPONSE_TEMPERATURE,
+    MICROPHONE_NAME, SPEAKER_NAME, THRESHOLD
+)
 
 # Load environment variables
 load_dotenv()
@@ -15,38 +21,64 @@ client = OpenAI(
 class VoiceButton:
     def __init__(self):
         # Initialize audio parameters
-        self.sample_rate = 44100
-        self.channels = 1
-        self.chunk = 1024
-        self.record_seconds = 5
+        self.sample_rate = AUDIO_SAMPLE_RATE
+        self.channels = CHANNELS
+        self.chunk = CHUNK_SIZE
+        self.record_seconds = RECORD_SECONDS
         self.format = pyaudio.paInt16
         
         # Initialize conversation history
         self.conversation_history = []
         
+    def is_speech_detected(self, data):
+        """Check if audio input exceeds the speech threshold"""
+        # Convert bytes to integers
+        audio_data = np.frombuffer(data, dtype=np.int16)
+        # Calculate RMS value using absolute values to avoid negative numbers
+        rms = np.sqrt(np.mean(np.square(np.abs(audio_data).astype(np.float64))))
+        return rms > THRESHOLD
+    
     def record_audio(self):
-        """Record audio from microphone"""
-        print("Recording... (5 seconds)")
+        """Record audio when speech is detected"""
+        print("Listening for speech...")
         
         # Initialize PyAudio
         audio = pyaudio.PyAudio()
         
         # Open stream
         stream = audio.open(format=self.format,
-                          channels=self.channels,
-                          rate=self.sample_rate,
-                          input=True,
-                          frames_per_buffer=self.chunk)
+                           channels=self.channels,
+                           rate=self.sample_rate,
+                           input=True,
+                           frames_per_buffer=self.chunk)
         
         frames = []
-        for _ in range(0, int(self.sample_rate / self.chunk * self.record_seconds)):
-            data = stream.read(self.chunk)
-            frames.append(data)
+        silence_counter = 0
+        is_recording = False
         
-        # Stop and close the stream
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
+        try:
+            while True:
+                data = stream.read(self.chunk)
+                
+                if self.is_speech_detected(data):
+                    if not is_recording:
+                        print("Speech detected, recording...")
+                        is_recording = True
+                    frames.append(data)
+                    silence_counter = 0
+                elif is_recording:
+                    frames.append(data)
+                    silence_counter += 1
+                    
+                    # Stop recording after ~1 second of silence
+                    if silence_counter > int(self.sample_rate / self.chunk):
+                        break
+        
+        finally:
+            # Stop and close the stream
+            stream.stop_stream()
+            stream.close()
+            audio.terminate()
         
         return b''.join(frames)
     
@@ -69,7 +101,7 @@ class VoiceButton:
                     file=audio,
                     language="en",
                     response_format="text",
-                    temperature=0.2
+                    temperature=REQUEST_TEMPERATURE
                 )
             return transcript
         except Exception as e:
@@ -90,10 +122,10 @@ class VoiceButton:
             self.conversation_history.append({"role": "user", "content": user_input})
             
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=MODEL_NAME,
                 messages=self.conversation_history,
-                max_tokens=150,
-                temperature=0.7
+                max_tokens=MAX_TOKENS,
+                temperature=RESPONSE_TEMPERATURE
             )
             
             assistant_response = response.choices[0].message.content
@@ -126,32 +158,25 @@ class VoiceButton:
     
     def run(self):
         """Main loop to run the voice button"""
-        print("Voice Button is ready! Press Enter to start a conversation (or 'q' to quit)...")
+        print("Voice Button is ready! Press Ctrl+C to quit...")
         
         try:
             while True:
-                user_input = input()
-                if user_input.lower() == 'q':
-                    break
-                    
-                print("Starting conversation...")
-                
-                # Record audio
+                # Record audio when speech is detected
                 audio_data = self.record_audio()
                 self.save_audio(audio_data)
                 
                 # Transcribe audio
                 transcript = self.transcribe_audio("recording.wav")
-                print(f"You said: {transcript}")
-                
-                # Get ChatGPT response
-                response = self.get_chatgpt_response(transcript)
-                print(f"ChatGPT: {response}")
-                
-                # Convert response to speech
-                self.text_to_speech(response)
-                
-                print("\nPress Enter for another conversation (or 'q' to quit)...")
+                if transcript:
+                    print(f"You said: {transcript}")
+                    
+                    # Get ChatGPT response
+                    response = self.get_chatgpt_response(transcript)
+                    print(f"ChatGPT: {response}")
+                    
+                    # Convert response to speech
+                    self.text_to_speech(response)
                 
         except KeyboardInterrupt:
             print("\nShutting down...")
