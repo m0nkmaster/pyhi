@@ -38,3 +38,7 @@ TIMEOUT_SECONDS = 30
 
 # Sound Configuration
 ACTIVATION_SOUND = "bing.m4a"  # Sound file to play when activated
+
+# Silence Detection Configuration
+WAKE_WORD_SILENCE_THRESHOLD = 1.5  # Seconds of silence before triggering wake word detection
+RESPONSE_SILENCE_THRESHOLD = 2.0    # Seconds of silence before ending user input in active mode

@@ -8,7 +8,7 @@ from config import (
     AUDIO_SAMPLE_RATE, CHANNELS, CHUNK_SIZE, RECORD_SECONDS,
     MODEL_NAME, MAX_TOKENS, REQUEST_TEMPERATURE, RESPONSE_TEMPERATURE,
     MICROPHONE_NAME, SPEAKER_NAME, THRESHOLD, WAKE_WORDS, TIMEOUT_SECONDS,
-    ACTIVATION_SOUND
+    ACTIVATION_SOUND, WAKE_WORD_SILENCE_THRESHOLD, RESPONSE_SILENCE_THRESHOLD
 )
 from datetime import datetime, timedelta
 
@@ -40,6 +40,10 @@ class VoiceButton:
         
         # Generate activation sound on startup
         self.generate_activation_sound()
+        
+        # Initialize silence thresholds
+        self.wake_word_silence_threshold = int(self.sample_rate * WAKE_WORD_SILENCE_THRESHOLD / self.chunk)
+        self.response_silence_threshold = int(self.sample_rate * RESPONSE_SILENCE_THRESHOLD / self.chunk)
 
     def run(self):
         """Main loop to run the voice button"""
@@ -62,7 +66,7 @@ class VoiceButton:
                         continue  # Keep listening for wake word
 
                 # If we're awake, process normal conversation
-                audio_data = self.record_audio()
+                audio_data = self.record_audio(self.response_silence_threshold)
                 if audio_data is None:  # No speech detected
                     continue
                     
@@ -96,7 +100,7 @@ class VoiceButton:
         print("Listening for wake word...")
         
         # Record a short audio sample
-        audio_data = self.record_audio()
+        audio_data = self.record_audio(self.wake_word_silence_threshold)
         if audio_data is None:
             return False
         
@@ -114,7 +118,7 @@ class VoiceButton:
                     return True
         return False
 
-    def record_audio(self):
+    def record_audio(self, silence_threshold):
         """Record audio when speech is detected"""
         if not self.is_awake:
             print("Listening for wake word...")
@@ -158,12 +162,12 @@ class VoiceButton:
                     frames.append(data)
                     silence_counter += 1
                     
-                    # Stop recording after ~1 second of silence
-                    if silence_counter > int(self.sample_rate / self.chunk):
-                        if len(frames) > int(self.sample_rate / self.chunk):
+                    # Stop recording after configured silence duration
+                    if silence_counter > silence_threshold:
+                        if len(frames) > silence_threshold:
                             break
                         else:
-                            # Reset if the recording was too short (probably noise)
+                            # Reset if the recording was too short
                             frames = []
                             is_recording = False
                             silence_counter = 0
