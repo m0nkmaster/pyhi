@@ -2,9 +2,8 @@ import os
 import platform
 import subprocess
 from typing import Optional, Callable
-import wave
-import numpy as np
 from ..utils.types import AudioPlayer
+from ..config import AudioPlayerConfig
 
 class AudioPlayerError(Exception):
     """Custom exception for audio player errors."""
@@ -13,42 +12,32 @@ class AudioPlayerError(Exception):
 class SystemAudioPlayer(AudioPlayer):
     def __init__(
         self,
-        on_error: Optional[Callable[[Exception], None]] = None
+        on_error: Optional[Callable[[Exception], None]] = None,
+        config: Optional[AudioPlayerConfig] = None
     ):
-        """
-        Initialize the system audio player.
-        
-        Args:
-            on_error: Optional callback for error handling
-        """
+        """Initialize the system audio player."""
         self.on_error = on_error or (lambda e: None)
         self._platform = platform.system().lower()
+        self.config = config or AudioPlayerConfig()
         
         if self._platform not in ['darwin', 'linux', 'windows']:
             raise AudioPlayerError(f"Unsupported platform: {self._platform}")
     
     def play(self, audio_data: bytes) -> None:
-        """
-        Play audio data using the system's audio player.
-        
-        Args:
-            audio_data: Raw audio data in bytes
-        """
-        # Save audio data to a temporary file
-        temp_file = "temp_playback.mp3"
+        """Play audio data using the system's audio player."""
         try:
-            # Save the raw audio data
-            with open(temp_file, "wb") as f:
+            # Save audio data to a temporary file
+            with open(self.config.temp_file, "wb") as f:
                 f.write(audio_data)
             
             # Play using system audio player
-            self._play_audio_file(temp_file)
+            self._play_audio_file(self.config.temp_file)
         except Exception as e:
             self.on_error(e)
             raise AudioPlayerError(f"Failed to play audio: {e}")
         finally:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
+            if os.path.exists(self.config.temp_file):
+                os.remove(self.config.temp_file)
     
     def _play_audio_file(self, filename: str) -> None:
         """Play an audio file using the system's audio player."""

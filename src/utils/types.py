@@ -1,13 +1,6 @@
 from typing import Protocol, List, Optional
 from dataclasses import dataclass
-import numpy as np
-
-@dataclass
-class AudioConfig:
-    sample_rate: int
-    channels: int
-    chunk_size: int
-    format: int
+from ..config import AudioConfig  # Import from config instead
 
 @dataclass
 class AudioFrame:

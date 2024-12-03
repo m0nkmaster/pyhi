@@ -18,88 +18,73 @@ from .config import (
     AudioRecorderConfig,
     ChatConfig,
     TTSConfig,
-    AppConfig
+    AppConfig,
+    AudioPlayerConfig,
+    WakeWordConfig
 )
 
 class VoiceAssistant:
     def __init__(self, wake_words: list[str], timeout_seconds: float = 30.0):
-        """
-        Initialize the voice assistant.
-        
-        Args:
-            wake_words: List of wake word phrases
-            timeout_seconds: Session timeout in seconds
-        """
+        """Initialize the voice assistant."""
         # Load environment variables
         load_dotenv()
+        
+        # Initialize configurations
+        self.app_config = AppConfig(
+            timeout_seconds=timeout_seconds,
+            wake_words=wake_words
+        )
+        
+        self.audio_config = AudioConfig()
+        self.audio_player_config = AudioPlayerConfig()
         
         print("Initializing OpenAI client...")
         openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # Initialize audio configuration
-        self.audio_config = AudioConfig(
-            sample_rate=44100,
-            channels=1,
-            chunk_size=1024,
-            format=pyaudio.paInt16
-        )
-        
         print("Initializing components...")
         self.openai_wrapper = OpenAIWrapper(
             client=openai_client,
-            chat_config=ChatConfig(
-                model="gpt-3.5-turbo",
-                max_tokens=150,
-                temperature=0.7
-            ),
-            tts_config=TTSConfig(
-                model="tts-1",
-                voice="nova"
-            )
+            chat_config=ChatConfig(),
+            tts_config=TTSConfig()
+        )
+        
+        # Initialize conversation manager
+        self.conversation_manager = ChatConversationManager(
+            system_prompt="You are a helpful voice assistant. Please keep your responses concise and natural."
         )
         
         self.wake_word_detector = WhisperWakeWordDetector(
             client=openai_client,
             wake_words=wake_words,
-            temperature=0.2
-        )
-        
-        self.conversation_manager = ChatConversationManager(
-            system_prompt="You are a helpful voice assistant. Please keep responses concise and natural for speech."
+            config=WakeWordConfig(),
+            audio_config=self.audio_config
         )
         
         print("Setting up audio system...")
         self.audio_player = SystemAudioPlayer(
-            on_error=lambda e: print(f"Audio playback error: {e}")
-        )
-        
-        # Create recorder config
-        recorder_config = AudioRecorderConfig(
-            wake_word_silence_threshold=1.0,
-            response_silence_threshold=2.0,
-            buffer_duration=1.0
+            on_error=lambda e: print(f"Audio playback error: {e}"),
+            config=self.audio_player_config
         )
         
         self.audio_recorder = PyAudioRecorder(
             config=self.audio_config,
-            analyzer=self,  # We implement AudioAnalyzer protocol
+            analyzer=self,
             on_error=lambda e: print(f"Recording error: {e}"),
-            recorder_config=recorder_config
+            recorder_config=AudioRecorderConfig()
         )
         
         # Initialize state
         self.is_awake = False
         self.last_interaction: Optional[datetime] = None
-        self.timeout_seconds = timeout_seconds
         
         # Load activation sound
         print("Loading activation sound...")
         try:
-            with open("src/assets/bing.mp3", "rb") as f:
+            with open(self.audio_player_config.activation_sound_path, "rb") as f:
                 self.activation_sound = f.read()
             print("Activation sound loaded successfully!")
         except FileNotFoundError:
-            print("Warning: bing.mp3 not found. No activation sound will be played.")
+            print(f"Warning: {self.audio_player_config.activation_sound_path} not found. No activation sound will be played.")
             self.activation_sound = None
     
     def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
@@ -235,7 +220,7 @@ class VoiceAssistant:
             return False
         
         elapsed = (datetime.now() - self.last_interaction).total_seconds()
-        remaining = self.timeout_seconds - elapsed
+        remaining = self.app_config.timeout_seconds - elapsed
         
         if remaining > 0:
             print(f"\rSession timeout in: {remaining:.1f}s...", end="", flush=True)
