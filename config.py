@@ -17,3 +17,7 @@ RESPONSE_TEMPERATURE = 0.7
 # Audio Device Names (configure these based on your hardware)
 MICROPHONE_NAME = "default"
 SPEAKER_NAME = "default"
+
+# Wake Word Configuration
+WAKE_WORDS = ["hey, chat", "hey chat", "hi chat", "hello chat"]
+TIMEOUT_SECONDS = 30

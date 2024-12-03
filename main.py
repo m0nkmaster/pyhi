@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 from config import (
     AUDIO_SAMPLE_RATE, CHANNELS, CHUNK_SIZE, RECORD_SECONDS,
     MODEL_NAME, MAX_TOKENS, REQUEST_TEMPERATURE, RESPONSE_TEMPERATURE,
-    MICROPHONE_NAME, SPEAKER_NAME, THRESHOLD
+    MICROPHONE_NAME, SPEAKER_NAME, THRESHOLD, WAKE_WORDS, TIMEOUT_SECONDS
 )
+from datetime import datetime, timedelta
 
 # Load environment variables
 load_dotenv()
@@ -30,17 +31,88 @@ class VoiceButton:
         # Initialize conversation history
         self.conversation_history = []
         
-    def is_speech_detected(self, data):
-        """Check if audio input exceeds the speech threshold"""
-        # Convert bytes to integers
-        audio_data = np.frombuffer(data, dtype=np.int16)
-        # Calculate RMS value using absolute values to avoid negative numbers
-        rms = np.sqrt(np.mean(np.square(np.abs(audio_data).astype(np.float64))))
-        return rms > THRESHOLD
-    
+        # Initialize wake word and timeout settings
+        self.wake_words = WAKE_WORDS
+        self.is_awake = False
+        self.last_interaction = None
+        self.timeout_seconds = TIMEOUT_SECONDS
+
+    def run(self):
+        """Main loop to run the voice button"""
+        print(f"Voice Button is ready! Say '{self.wake_words[0]}' to wake me up (Press Ctrl+C to quit)...")
+        
+        try:
+            while True:
+                # Check for timeout when awake
+                if self.is_awake and self.check_timeout():
+                    print("Going back to sleep. Say the wake word to start a new conversation.")
+                    continue
+
+                if not self.is_awake:
+                    # Listen for wake word
+                    if self.listen_for_wake_word():
+                        self.is_awake = True
+                        self.last_interaction = datetime.now()
+                        continue
+                    else:
+                        continue  # Keep listening for wake word
+
+                # If we're awake, process normal conversation
+                audio_data = self.record_audio()
+                if audio_data is None:  # No speech detected
+                    continue
+                    
+                self.save_audio(audio_data)
+                
+                # Transcribe audio
+                transcript = self.transcribe_audio("recording.wav")
+                if not transcript:
+                    continue
+
+                print(f"You said: {transcript}")
+                
+                # Get ChatGPT response
+                response = self.get_chatgpt_response(transcript)
+                if response:
+                    print(f"ChatGPT: {response}")
+                    self.text_to_speech(response)
+                    self.last_interaction = datetime.now()
+                
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+        finally:
+            # Cleanup
+            if os.path.exists("recording.wav"):
+                os.remove("recording.wav")
+            if os.path.exists("response.mp3"):
+                os.remove("response.mp3")
+
+    def listen_for_wake_word(self):
+        """Listen for the wake word using Whisper API"""
+        print("Listening for wake word...")
+        
+        # Record a short audio sample
+        audio_data = self.record_audio()
+        if audio_data is None:
+            return False
+        
+        self.save_audio(audio_data)
+        
+        # Transcribe using Whisper
+        transcript = self.transcribe_audio("recording.wav")
+        if transcript:
+            transcript = transcript.lower()
+            print(f"Detected: {transcript}")
+            for wake_word in WAKE_WORDS:
+                if wake_word in transcript:
+                    print("Wake word detected! How can I help you?")
+                    return True
+        return False
+
     def record_audio(self):
         """Record audio when speech is detected"""
-        print("Listening for speech...")
+        if not self.is_awake:
+            print("Listening for wake word...")
         
         # Initialize PyAudio
         audio = pyaudio.PyAudio()
@@ -54,13 +126,24 @@ class VoiceButton:
         
         frames = []
         silence_counter = 0
+        speech_detection_buffer = []
         is_recording = False
         
         try:
             while True:
-                data = stream.read(self.chunk)
+                try:
+                    data = stream.read(self.chunk, exception_on_overflow=False)
+                except IOError as e:
+                    continue
                 
-                if self.is_speech_detected(data):
+                # Keep a small buffer of recent audio analysis results
+                is_speech = self.analyze_audio_frame(data)
+                speech_detection_buffer.append(is_speech)
+                if len(speech_detection_buffer) > 3:
+                    speech_detection_buffer.pop(0)
+                
+                # Only trigger recording if we have consistent speech detection
+                if sum(speech_detection_buffer) >= 2:  # At least 2 out of 3 frames are speech
                     if not is_recording:
                         print("Speech detected, recording...")
                         is_recording = True
@@ -72,7 +155,14 @@ class VoiceButton:
                     
                     # Stop recording after ~1 second of silence
                     if silence_counter > int(self.sample_rate / self.chunk):
-                        break
+                        if len(frames) > int(self.sample_rate / self.chunk):
+                            break
+                        else:
+                            # Reset if the recording was too short (probably noise)
+                            frames = []
+                            is_recording = False
+                            silence_counter = 0
+                            return None
         
         finally:
             # Stop and close the stream
@@ -80,8 +170,8 @@ class VoiceButton:
             stream.close()
             audio.terminate()
         
-        return b''.join(frames)
-    
+        return b''.join(frames) if frames else None
+
     def save_audio(self, audio_data, filename="recording.wav"):
         """Save recorded audio to WAV file"""
         audio = pyaudio.PyAudio()
@@ -91,7 +181,7 @@ class VoiceButton:
             wf.setframerate(self.sample_rate)
             wf.writeframes(audio_data)
         audio.terminate()
-    
+
     def transcribe_audio(self, audio_file):
         """Transcribe audio file using OpenAI's Whisper API"""
         try:
@@ -107,13 +197,25 @@ class VoiceButton:
         except Exception as e:
             print(f"Error transcribing audio: {e}")
             return None
-    
+
+    def check_timeout(self):
+        """Check if the system should go to sleep due to inactivity"""
+        if not self.last_interaction:
+            return False
+        
+        time_elapsed = datetime.now() - self.last_interaction
+        if time_elapsed.seconds >= self.timeout_seconds:
+            self.is_awake = False
+            print("\nGoing to sleep due to inactivity...")
+            return True
+        return False
+
     def get_chatgpt_response(self, user_input):
         """Get response from ChatGPT"""
         if not user_input:
             print("No valid input to process")
             return None
-            
+        
         try:
             self.conversation_history.append({
                 "role": "system",
@@ -134,13 +236,13 @@ class VoiceButton:
         except Exception as e:
             print(f"Error getting ChatGPT response: {e}")
             return None
-    
+
     def text_to_speech(self, text):
         """Convert text to speech using OpenAI's TTS API"""
         if not text:
             print("No text to convert to speech")
             return
-            
+        
         try:
             response = client.audio.speech.create(
                 model="tts-1",
@@ -155,37 +257,36 @@ class VoiceButton:
             os.system("afplay response.mp3")  # Using afplay for macOS
         except Exception as e:
             print(f"Error converting text to speech: {e}")
-    
-    def run(self):
-        """Main loop to run the voice button"""
-        print("Voice Button is ready! Press Ctrl+C to quit...")
+
+    def analyze_audio_frame(self, data):
+        """Analyze audio frame for speech-like characteristics"""
+        # Convert bytes to integers
+        audio_data = np.frombuffer(data, dtype=np.int16)
         
-        try:
-            while True:
-                # Record audio when speech is detected
-                audio_data = self.record_audio()
-                self.save_audio(audio_data)
-                
-                # Transcribe audio
-                transcript = self.transcribe_audio("recording.wav")
-                if transcript:
-                    print(f"You said: {transcript}")
-                    
-                    # Get ChatGPT response
-                    response = self.get_chatgpt_response(transcript)
-                    print(f"ChatGPT: {response}")
-                    
-                    # Convert response to speech
-                    self.text_to_speech(response)
-                
-        except KeyboardInterrupt:
-            print("\nShutting down...")
-        finally:
-            # Cleanup
-            if os.path.exists("recording.wav"):
-                os.remove("recording.wav")
-            if os.path.exists("response.mp3"):
-                os.remove("response.mp3")
+        # Calculate RMS amplitude
+        rms = np.sqrt(np.mean(np.square(np.abs(audio_data).astype(np.float64))))
+        
+        # Perform FFT to get frequency components
+        fft = np.fft.fft(audio_data)
+        frequencies = np.abs(fft)
+        
+        # Focus on frequency range for human speech (roughly 100-3000 Hz)
+        freq_bins = len(frequencies)
+        speech_range_start = int(100 * freq_bins / self.sample_rate)
+        speech_range_end = int(3000 * freq_bins / self.sample_rate)
+        speech_frequencies = frequencies[speech_range_start:speech_range_end]
+        
+        # Calculate metrics
+        avg_speech_magnitude = np.mean(speech_frequencies)
+        peak_frequency = np.argmax(speech_frequencies) + speech_range_start
+        peak_hz = peak_frequency * self.sample_rate / freq_bins
+        
+        # Define speech characteristics
+        is_loud_enough = rms > THRESHOLD
+        has_speech_frequencies = (100 < peak_hz < 3000)
+        has_sufficient_variation = np.std(speech_frequencies) > THRESHOLD/4
+        
+        return (is_loud_enough and has_speech_frequencies and has_sufficient_variation)
 
 if __name__ == "__main__":
     if not os.getenv('OPENAI_API_KEY'):
