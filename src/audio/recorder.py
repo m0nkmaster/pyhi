@@ -144,24 +144,6 @@ class PyAudioRecorder:
             self.session_silence_counter = 0
             self.is_recording = False
     
-    def read_frame(self) -> AudioFrame:
-        """
-        Read a single frame of audio data.
-        
-        Returns:
-            AudioFrame: The audio frame with speech detection result
-        """
-        if self.stream is None:
-            raise RuntimeError("Recording not started")
-        
-        try:
-            data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
-            is_speech = self.analyzer.is_speech(data, self.config)
-            return AudioFrame(data=data, is_speech=is_speech)
-        except Exception as e:
-            self.on_error(e)
-            raise
-    
     def __del__(self):
         """Cleanup resources."""
         if self.stream is not None:

@@ -15,10 +15,6 @@ class AudioRecorder(Protocol):
     def stop_recording(self) -> bytes:
         """Stop recording and return the recorded audio data."""
         ...
-    
-    def read_frame(self) -> AudioFrame:
-        """Read a single frame of audio data."""
-        ...
 
 class AudioAnalyzer(Protocol):
     def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
