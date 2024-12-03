@@ -32,13 +32,27 @@ WAKE_WORDS = [
     "hello chatbot",
     "ok chat",
     "okay chat",
-    "yo chat"
+    "yo chat",
+    "chat.",
+    "chads.",
+    "hey chads",
+    "hey, chads",
+    "hi chads",
+    "hi, chads",
+    "hello chads",
+    "hello, chads",
+    "8 chat",
+    "chats.",
+    "chat",
+    "chats",
+    "stay chat",
+    "stay, chat"
 ]
-TIMEOUT_SECONDS = 30
+TIMEOUT_SECONDS = 30.0
 
 # Sound Configuration
 ACTIVATION_SOUND = "bing.m4a"  # Sound file to play when activated
 
 # Silence Detection Configuration
-WAKE_WORD_SILENCE_THRESHOLD = 1.5  # Seconds of silence before triggering wake word detection
+WAKE_WORD_SILENCE_THRESHOLD = 1.0  # Seconds of silence before triggering wake word detection
 RESPONSE_SILENCE_THRESHOLD = 2.0    # Seconds of silence before ending user input in active mode

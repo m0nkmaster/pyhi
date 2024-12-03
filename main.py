@@ -11,6 +11,8 @@ from config import (
     ACTIVATION_SOUND, WAKE_WORD_SILENCE_THRESHOLD, RESPONSE_SILENCE_THRESHOLD
 )
 from datetime import datetime, timedelta
+import sys
+import time
 
 # Load environment variables
 load_dotenv()
@@ -37,6 +39,7 @@ class VoiceButton:
         self.is_awake = False
         self.last_interaction = None
         self.timeout_seconds = TIMEOUT_SECONDS
+        print(f"Timeout seconds set to: {self.timeout_seconds}")
         
         # Generate activation sound on startup
         self.generate_activation_sound()
@@ -52,9 +55,13 @@ class VoiceButton:
         try:
             while True:
                 # Check for timeout when awake
-                if self.is_awake and self.check_timeout():
-                    print("Going back to sleep. Say the wake word to start a new conversation.")
-                    continue
+                if self.is_awake:
+                    if self.check_timeout():
+                        print("\nGoing back to sleep. Say the wake word to start a new conversation.")
+                        self.is_awake = False
+                        self.last_interaction = None
+                        continue
+                    time.sleep(0.1)  # Add small delay to allow countdown to update
 
                 if not self.is_awake:
                     # Listen for wake word
@@ -63,7 +70,7 @@ class VoiceButton:
                         self.last_interaction = datetime.now()
                         continue
                     else:
-                        continue  # Keep listening for wake word
+                        continue
 
                 # If we're awake, process normal conversation
                 audio_data = self.record_audio(self.response_silence_threshold)
@@ -71,6 +78,7 @@ class VoiceButton:
                     continue
                     
                 self.save_audio(audio_data)
+                self.last_interaction = datetime.now()
                 
                 # Transcribe audio
                 transcript = self.transcribe_audio("recording.wav")
@@ -84,7 +92,7 @@ class VoiceButton:
                 if response:
                     print(f"ChatGPT: {response}")
                     self.text_to_speech(response)
-                    self.last_interaction = datetime.now()
+                    self.last_interaction = datetime.now()  # Update after response
                 
         except KeyboardInterrupt:
             print("\nShutting down...")
@@ -123,10 +131,7 @@ class VoiceButton:
         if not self.is_awake:
             print("Listening for wake word...")
         
-        # Initialize PyAudio
         audio = pyaudio.PyAudio()
-        
-        # Open stream
         stream = audio.open(format=self.format,
                            channels=self.channels,
                            rate=self.sample_rate,
@@ -135,6 +140,7 @@ class VoiceButton:
         
         frames = []
         silence_counter = 0
+        session_silence_counter = 0  # For tracking overall silence in active mode
         speech_detection_buffer = []
         is_recording = False
         
@@ -145,36 +151,54 @@ class VoiceButton:
                 except IOError as e:
                     continue
                 
-                # Keep a small buffer of recent audio analysis results
                 is_speech = self.analyze_audio_frame(data)
                 speech_detection_buffer.append(is_speech)
                 if len(speech_detection_buffer) > 3:
                     speech_detection_buffer.pop(0)
                 
-                # Only trigger recording if we have consistent speech detection
-                if sum(speech_detection_buffer) >= 2:  # At least 2 out of 3 frames are speech
+                if sum(speech_detection_buffer) >= 2:
                     if not is_recording:
-                        print("Speech detected, recording...")
+                        print("\nSpeech detected, recording...")
                         is_recording = True
                     frames.append(data)
                     silence_counter = 0
-                elif is_recording:
-                    frames.append(data)
-                    silence_counter += 1
-                    
-                    # Stop recording after configured silence duration
-                    if silence_counter > silence_threshold:
-                        if len(frames) > silence_threshold:
-                            break
-                        else:
-                            # Reset if the recording was too short
-                            frames = []
-                            is_recording = False
-                            silence_counter = 0
+                    session_silence_counter = 0  # Reset session timeout when speech detected
+                else:
+                    # Increment both silence counters
+                    if self.is_awake:
+                        session_silence_counter += 1
+                        session_silence_duration = (session_silence_counter * self.chunk) / self.sample_rate
+                        
+                        # Check for session timeout
+                        if session_silence_duration >= self.timeout_seconds:
+                            print("\nSession timeout due to no speech...")
+                            self.is_awake = False
                             return None
+                        else:
+                            self.display_countdown(self.timeout_seconds - session_silence_duration, 
+                                                "\nSession timeout in: ")
+                    
+                    if is_recording:
+                        frames.append(data)
+                        silence_counter += 1
+                        recording_silence_duration = (silence_counter * self.chunk) / self.sample_rate
+                        
+                        # Display recording silence countdown
+                        self.display_countdown(RESPONSE_SILENCE_THRESHOLD - recording_silence_duration, 
+                                            "Recording silence: ")
+                        
+                        # Check if recording should end
+                        if recording_silence_duration >= RESPONSE_SILENCE_THRESHOLD:
+                            if len(frames) > silence_threshold:
+                                print("\nRecording complete!")
+                                break
+                            else:
+                                frames = []
+                                is_recording = False
+                                silence_counter = 0
+                                return None
         
         finally:
-            # Stop and close the stream
             stream.stop_stream()
             stream.close()
             audio.terminate()
@@ -213,11 +237,15 @@ class VoiceButton:
             return False
         
         time_elapsed = datetime.now() - self.last_interaction
-        if time_elapsed.seconds >= self.timeout_seconds:
-            self.is_awake = False
-            print("\nGoing to sleep due to inactivity...")
-            return True
-        return False
+        seconds_remaining = self.timeout_seconds - time_elapsed.total_seconds()
+        
+        if seconds_remaining > 0:
+            self.display_countdown(seconds_remaining, "Session timeout in: ")
+            return False
+        
+        self.is_awake = False
+        print("\nGoing to sleep due to inactivity...")
+        return True
 
     def get_chatgpt_response(self, user_input):
         """Get response from ChatGPT"""
@@ -320,6 +348,11 @@ class VoiceButton:
             os.system(f"afplay {ACTIVATION_SOUND}")
         except Exception as e:
             print(f"Error playing activation sound: {e}")
+
+    def display_countdown(self, seconds_left, prefix=""):
+        """Display a countdown timer"""
+        sys.stdout.write(f"\r{prefix}{seconds_left:.1f}s remaining...")
+        sys.stdout.flush()
 
 if __name__ == "__main__":
     if not os.getenv('OPENAI_API_KEY'):
