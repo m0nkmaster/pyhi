@@ -19,7 +19,7 @@ class VoiceButton:
         self.channels = 1
         self.chunk = 1024
         self.record_seconds = 5
-        self.format = pyaudio.paFloat32
+        self.format = pyaudio.paInt16
         
         # Initialize conversation history
         self.conversation_history = []
@@ -67,15 +67,21 @@ class VoiceButton:
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio,
-                    language="en"
+                    language="en",
+                    response_format="text",
+                    temperature=0.2
                 )
-            return transcript.text
+            return transcript
         except Exception as e:
             print(f"Error transcribing audio: {e}")
             return None
     
     def get_chatgpt_response(self, user_input):
         """Get response from ChatGPT"""
+        if not user_input:
+            print("No valid input to process")
+            return None
+            
         try:
             self.conversation_history.append({
                 "role": "system",
@@ -99,6 +105,10 @@ class VoiceButton:
     
     def text_to_speech(self, text):
         """Convert text to speech using OpenAI's TTS API"""
+        if not text:
+            print("No text to convert to speech")
+            return
+            
         try:
             response = client.audio.speech.create(
                 model="tts-1",
