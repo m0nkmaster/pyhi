@@ -22,8 +22,8 @@ A Python-based voice assistant that enables natural conversations with ChatGPT u
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/voice-assistant.git
-cd voice-assistant
+git clone https://github.com/m0nkmaster/chat-button.git
+cd chat-button
 ```
 
 2. Install dependencies:
