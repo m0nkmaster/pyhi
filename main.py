@@ -129,7 +129,7 @@ class VoiceButton:
     def record_audio(self, silence_threshold):
         """Record audio when speech is detected"""
         if not self.is_awake:
-            print("Listening for wake word...")
+            print("Recording in passive mode...")
         
         audio = pyaudio.PyAudio()
         stream = audio.open(format=self.format,
