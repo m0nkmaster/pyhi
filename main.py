@@ -282,14 +282,12 @@ class VoiceButton:
             return
         
         try:
-            response = client.audio.speech.create(
+            with client.audio.speech.with_streaming_response.create(
                 model="tts-1",
                 voice="nova",
                 input=text
-            )
-            
-            # Save the audio response
-            response.stream_to_file("response.mp3")
+            ) as response:
+                response.stream_to_file("response.mp3")
             
             # Play the audio
             os.system("afplay response.mp3")  # Using afplay for macOS
