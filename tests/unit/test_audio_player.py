@@ -1,9 +1,8 @@
 import pytest
-import platform
 import subprocess
 from unittest.mock import Mock, patch
 import numpy as np
-from src.audio.player import SystemAudioPlayer, BeepGenerator, AudioPlayerError
+from src.audio.player import SystemAudioPlayer, AudioPlayerError
 
 @pytest.fixture
 def audio_player():
@@ -81,31 +80,3 @@ def test_error_callback():
             player.play(b'dummy_audio_data')
     
     mock_callback.assert_called_once()
-
-def test_beep_generator():
-    beep = BeepGenerator.generate_beep(
-        duration=0.1,
-        frequency=440,
-        sample_rate=44100
-    )
-    
-    # Convert bytes back to numpy array for testing
-    samples = np.frombuffer(beep, dtype=np.int16)
-    
-    # Check basic properties
-    assert len(samples) == int(0.1 * 44100)  # Duration * sample_rate
-    assert samples.dtype == np.int16
-    assert np.abs(samples).max() <= 32767  # Max value for 16-bit audio
-
-def test_beep_generator_fade():
-    beep = BeepGenerator.generate_beep(
-        duration=0.1,
-        frequency=440,
-        sample_rate=44100
-    )
-    samples = np.frombuffer(beep, dtype=np.int16)
-    
-    # Check fade in/out
-    fade_samples = int(0.02 * 44100)  # 20ms fade
-    assert abs(samples[0]) < abs(samples[fade_samples])  # Start is quieter
-    assert abs(samples[-1]) < abs(samples[-fade_samples])  # End is quieter 

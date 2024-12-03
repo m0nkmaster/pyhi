@@ -9,7 +9,7 @@ import wave
 
 from .audio.analyzer import is_speech
 from .audio.recorder import PyAudioRecorder
-from .audio.player import SystemAudioPlayer, BeepGenerator, AudioPlayerError
+from .audio.player import SystemAudioPlayer, AudioPlayerError
 from .wake_word.detector import WhisperWakeWordDetector
 from .conversation.manager import ChatConversationManager
 from .conversation.openai_client import OpenAIWrapper, ChatConfig, TTSConfig
@@ -83,11 +83,11 @@ class VoiceAssistant:
         # Load activation sound
         print("Loading activation sound...")
         try:
-            with open("bing.m4a", "rb") as f:
+            with open("src/assets/bing.mp3", "rb") as f:
                 self.activation_sound = f.read()
             print("Activation sound loaded successfully!")
         except FileNotFoundError:
-            print("Warning: bing.m4a not found. No activation sound will be played.")
+            print("Warning: bing.mp3 not found. No activation sound will be played.")
             self.activation_sound = None
     
     def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
@@ -251,9 +251,33 @@ def main():
     # Load wake words from config
     wake_words = [
         "hey chat",
+        "hey, chat",
         "hi chat",
+        "hi, chat",
         "hello chat",
-        "okay chat"
+        "hello, chat",
+        "hey chat bot",
+        "hey chatbot",
+        "hi chatbot",
+        "hello chatbot",
+        "ok chat",
+        "okay chat",
+        "yo chat",
+        "chat.",
+        "chads.",
+        "hey chads",
+        "hey, chads",
+        "hi chads",
+        "hi, chads",
+        "hello chads",
+        "hello, chads",
+        "8 chat",
+        "chats.",
+        "chat",
+        "chats",
+        "stay chat",
+        
+        "stay, chat"
     ]
     
     assistant = VoiceAssistant(wake_words=wake_words)
