@@ -14,8 +14,8 @@ if not os.getenv("OPENAI_API_KEY"):
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.7  # More sensitive silence detection
-    response_silence_threshold: float = 1.0    # Shorter silence threshold
-    buffer_duration: float = 0              # Shorter buffer for quicker response
+    response_silence_threshold: float = 1.5    # Shorter silence threshold
+    buffer_duration: float = 0.5              # Shorter buffer for quicker response
 
 
 @dataclass
@@ -56,9 +56,9 @@ class TTSConfig:
 @dataclass
 class WakeWordConfig:
     model: str = "whisper-1"
-    temperature: float = 0.0
+    temperature: float = 0.2
     language: str = "en"
-    min_audio_size: int = 2048
+    min_audio_size: int = 4096  # Minimum size in bytes for audio processing
 
 
 @dataclass

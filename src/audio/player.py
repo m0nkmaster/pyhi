@@ -22,6 +22,18 @@ class SystemAudioPlayer(AudioPlayer):
         
         if self._platform not in ['darwin', 'linux', 'windows']:
             raise AudioPlayerError(f"Unsupported platform: {self._platform}")
+        
+        # Check for mpg123 on Linux
+        if self._platform == 'linux':
+            try:
+                subprocess.run(['which', 'mpg123'], 
+                             check=True, 
+                             stdout=subprocess.PIPE, 
+                             stderr=subprocess.PIPE)
+            except subprocess.CalledProcessError:
+                raise AudioPlayerError(
+                    "mpg123 not found. Please install it with: sudo apt-get install mpg123"
+                )
     
     def play(self, audio_data: bytes) -> None:
         """Play audio data using the system's audio player."""
@@ -38,22 +50,19 @@ class SystemAudioPlayer(AudioPlayer):
         finally:
             if os.path.exists(self.config.temp_file):
                 os.remove(self.config.temp_file)
-    
+     
     def _play_audio_file(self, filename: str) -> None:
         """Play an audio file using the system's audio player."""
         try:
             if self._platform == 'darwin':
-                # macOS - afplay can handle both MP3 and WAV
                 subprocess.run(['afplay', filename], check=True)
+            
             elif self._platform == 'linux':
-                # Linux - try mpg123 for MP3, fallback to aplay for WAV
-                if filename.endswith('.mp3'):
-                    subprocess.run(['mpg123', filename], check=True)
-                else:
-                    subprocess.run(['aplay', filename], check=True)
+                subprocess.run(['mpg123', '-q', '-a', self.config.output_device, filename], check=True)
+            
             elif self._platform == 'windows':
-                # Windows - PowerShell can handle both MP3 and WAV
                 ps_command = f'(New-Object Media.SoundPlayer "{filename}").PlaySync()'
                 subprocess.run(['powershell', '-c', ps_command], check=True)
+                
         except subprocess.CalledProcessError as e:
             raise AudioPlayerError(f"Failed to play audio file: {e}")
