@@ -26,6 +26,33 @@ class PyAudioRecorder:
         self.on_error = on_error or (lambda e: None)
         self.audio = pyaudio.PyAudio()
         
+        # List all available devices
+        print("\nAvailable audio devices:")
+        input_devices = []
+        for i in range(self.audio.get_device_count()):
+            dev_info = self.audio.get_device_info_by_index(i)
+            if dev_info['maxInputChannels'] > 0:  # Only show input devices
+                input_devices.append(i)
+                print(f"Device {i}: {dev_info['name']}")
+                print(f"    Input channels: {dev_info['maxInputChannels']}")
+                print(f"    Sample rate: {dev_info['defaultSampleRate']}")
+        print()
+        
+        # If no device index specified, use the first available input device
+        if self.config.input_device_index is None and input_devices:
+            self.config.input_device_index = input_devices[0]
+        
+        # Get info for configured device
+        device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
+        print(f"Selected device info: {device_info}")
+        
+        if device_info['maxInputChannels'] == 0:
+            raise ValueError(f"Selected device {self.config.input_device_index} has no input channels. Please choose a valid input device.")
+        
+        # Use the device's native channels and sample rate
+        self.config.channels = int(device_info['maxInputChannels'])
+        self.config.sample_rate = int(device_info['defaultSampleRate'])
+        
         # Use provided config or defaults
         recorder_config = recorder_config or AudioRecorderConfig()
         
@@ -54,6 +81,7 @@ class PyAudioRecorder:
                 channels=self.config.channels,
                 rate=self.config.sample_rate,
                 input=True,
+                input_device_index=self.config.input_device_index,
                 frames_per_buffer=self.config.chunk_size
             )
             self.frames = []
