@@ -1,4 +1,4 @@
-# Voice Assistant
+# PyHi - Voice Assistant
 
 A Python-based voice assistant that enables natural conversations with ChatGPT using voice input and output. The assistant listens for wake words, processes voice commands, and responds with synthesized speech using OpenAI's APIs.
 
@@ -22,8 +22,8 @@ A Python-based voice assistant that enables natural conversations with ChatGPT u
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/m0nkmaster/chat-button.git
-cd chat-button
+git clone https://github.com/m0nkmaster/pyhi.git
+cd pyhi
 ```
 
 2. Install dependencies:
@@ -101,4 +101,4 @@ pytest tests/
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE.md) file for details
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details
