@@ -1,6 +1,7 @@
 from typing import List, Optional
 import re
 import os
+from difflib import SequenceMatcher
 from openai import OpenAI
 import wave
 from ..utils.types import WakeWordDetector, AudioConfig
@@ -19,6 +20,7 @@ class WhisperWakeWordDetector(WakeWordDetector):
         self.wake_words = self._prepare_wake_words(wake_words)
         self.config = config or WakeWordConfig()
         self.audio_config = audio_config or AudioConfig()
+        self.similarity_threshold = 0.85  # Adjust this value between 0 and 1
     
     def _prepare_wake_words(self, wake_words: List[str]) -> List[str]:
         """Prepare wake words with variations."""
@@ -37,6 +39,10 @@ class WhisperWakeWordDetector(WakeWordDetector):
     def _clean_text(self, text: str) -> str:
         """Clean text by removing extra whitespace and converting to lowercase."""
         return ' '.join(text.lower().split())
+    
+    def _calculate_similarity(self, str1: str, str2: str) -> float:
+        """Calculate string similarity ratio."""
+        return SequenceMatcher(None, str1, str2).ratio()
     
     def detect(self, audio_data: bytes) -> bool:
         """Detect if the wake word is present in the audio data."""
@@ -60,12 +66,16 @@ class WhisperWakeWordDetector(WakeWordDetector):
             transcript = self._clean_text(transcript)
             print(f"Transcript: '{transcript}'")
             
-            # Remove punctuation for comparison
-            transcript_no_punct = re.sub(r'[,.]', '', transcript)
-            
-            # Check for exact wake word matches
+            # Check for wake word matches with fuzzy matching
             for wake_word in self.wake_words:
-                if transcript == wake_word or transcript_no_punct == wake_word:
+                similarity = self._calculate_similarity(transcript, wake_word)
+                if similarity >= self.similarity_threshold:
+                    print(f"Wake word match: '{wake_word}' (similarity: {similarity:.2f})")
+                    return True
+                
+                # Check if wake word is contained within a longer phrase
+                if wake_word in transcript:
+                    print(f"Wake word contained in transcript: '{wake_word}'")
                     return True
             
             return False

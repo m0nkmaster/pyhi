@@ -56,9 +56,9 @@ class TTSConfig:
 @dataclass
 class WakeWordConfig:
     model: str = "whisper-1"
-    temperature: float = 0.2
+    temperature: float = 0.0
     language: str = "en"
-    min_audio_size: int = 4096  # Minimum size in bytes for audio processing
+    min_audio_size: int = 2048
 
 
 @dataclass
