@@ -37,6 +37,7 @@ class AudioConfig:
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
     activation_sound_path: str = "src/assets/bing.mp3"
+    output_device: str = "hw:1,0"  # Default to Jabra headset, can be configured
 
 
 @dataclass
@@ -77,5 +78,5 @@ class AppConfig:
                 "hey Jack", "hey check", "hey chap",
                 "hey shot", "hay chat", "hey chair",
                 "hey that", "he chat", "hey chatty",
-                "hey chat bot"
+                "hey chat bot", "hey chat!"
             ]

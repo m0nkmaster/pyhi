@@ -50,7 +50,7 @@ class SystemAudioPlayer(AudioPlayer):
         finally:
             if os.path.exists(self.config.temp_file):
                 os.remove(self.config.temp_file)
-    
+     
     def _play_audio_file(self, filename: str) -> None:
         """Play an audio file using the system's audio player."""
         try:
@@ -58,8 +58,7 @@ class SystemAudioPlayer(AudioPlayer):
                 subprocess.run(['afplay', filename], check=True)
             
             elif self._platform == 'linux':
-                # Try Jabra headset first (card 1)
-                subprocess.run(['mpg123', '-q', '-a', 'hw:1,0', filename], check=True)
+                subprocess.run(['mpg123', '-q', '-a', self.config.output_device, filename], check=True)
             
             elif self._platform == 'windows':
                 ps_command = f'(New-Object Media.SoundPlayer "{filename}").PlaySync()'
