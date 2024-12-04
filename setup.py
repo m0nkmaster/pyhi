@@ -6,7 +6,7 @@ setup(
     packages=find_namespace_packages(include=["src*"]),
     package_dir={"": "."},
     install_requires=[
-        "openai>=1.0.0",
+        "openai>=1.56.1",
         "python-dotenv>=0.19.0",
         "pyaudio>=0.2.11",
         "numpy>=1.21.0",

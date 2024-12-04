@@ -1,5 +1,14 @@
 from dataclasses import dataclass
 import pyaudio
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Verify API key is present
+if not os.getenv("OPENAI_API_KEY"):
+    raise ValueError("OPENAI_API_KEY not found in environment variables. Please check your .env file.")
 
 @dataclass
 class AudioRecorderConfig:

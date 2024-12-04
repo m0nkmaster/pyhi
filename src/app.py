@@ -2,7 +2,6 @@ import os
 from datetime import datetime
 import time
 from typing import Optional
-from dotenv import load_dotenv
 import pyaudio
 from openai import OpenAI
 import wave
@@ -26,9 +25,6 @@ from .config import (
 class VoiceAssistant:
     def __init__(self, wake_words: list[str], timeout_seconds: float = 30.0):
         """Initialize the voice assistant."""
-        # Load environment variables
-        load_dotenv()
-        
         # Initialize configurations
         self.app_config = AppConfig(
             timeout_seconds=timeout_seconds,
@@ -39,7 +35,7 @@ class VoiceAssistant:
         self.audio_player_config = AudioPlayerConfig()
         
         print("Initializing OpenAI client...")
-        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        openai_client = OpenAI()
         
         print("Initializing components...")
         self.openai_wrapper = OpenAIWrapper(
