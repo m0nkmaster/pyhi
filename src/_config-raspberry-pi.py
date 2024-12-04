@@ -13,19 +13,19 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.7  # More sensitive silence detection
-    response_silence_threshold: float = 1.0    # Shorter silence threshold
-    buffer_duration: float = 0              # Shorter buffer for quicker response
+    wake_word_silence_threshold: float = 1.0  # Seconds of silence before ending wake word detection
+    response_silence_threshold: float = 2.0  # Seconds of silence before ending response recording
+    buffer_duration: float = 1.0  # Duration of audio buffer in seconds
 
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 16000  # Lower sample rate for better speech recognition
+    sample_rate: int = 16000
     channels: int = 1
-    chunk_size: int = 512     # Smaller chunks for more frequent processing
+    chunk_size: int = 1024
     format: int = pyaudio.paInt16
-    input_device_index: int = 2
-    use_plughw: bool = False
+    input_device_index: int = 1
+    use_plughw: bool = True
 
     def __post_init__(self):
         # Make these mutable so they can be updated based on device capabilities
@@ -37,7 +37,7 @@ class AudioConfig:
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
     activation_sound_path: str = "src/assets/bing.mp3"
-    output_device: str = ""
+    output_device: str = "hw:1,0"  # Default to Jabra headset, can be configured
 
 
 @dataclass
