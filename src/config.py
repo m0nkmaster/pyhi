@@ -20,10 +20,17 @@ class AudioRecorderConfig:
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 44100
+    sample_rate: int = 16000
     channels: int = 1
     chunk_size: int = 1024
-    format: int = pyaudio.paInt16  # Changed from 16 to pyaudio.paInt16
+    format: int = pyaudio.paInt16
+    input_device_index: int = 1
+    use_plughw: bool = True
+
+    def __post_init__(self):
+        # Make these mutable so they can be updated based on device capabilities
+        self.sample_rate = self.sample_rate
+        self.channels = self.channels
 
 
 @dataclass
