@@ -90,6 +90,8 @@ The project uses a modular architecture with clear separation of concerns:
 - `src/wake_word/`: Wake word detection
 - `src/utils/`: Common utilities and type definitions
 
+See our [Development Roadmap](./ROADMAP.md) for planned features and improvements.
+
 ## Testing
 
 Run the test suite:
