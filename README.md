@@ -62,6 +62,8 @@ pyhi/
 ├── src/
 │   ├── app.py              # Main application entry point
 │   ├── config.py           # Configuration classes
+│   ├── _config-mac.py      # macOS-specific config
+│   ├── _config-raspberry-pi.py  # Raspberry Pi config
 │   ├── audio/              # Audio recording and playback
 │   │   ├── analyzer.py     # Speech analysis
 │   │   ├── player.py       # Audio playback
@@ -69,13 +71,14 @@ pyhi/
 │   ├── conversation/       # Chat functionality
 │   │   ├── manager.py      # Conversation management
 │   │   └── openai_client.py # OpenAI API integration
-│   ├── wake_word/         # Wake word detection
+│   ├── word_detection/     # Wake word detection
 │   │   └── detector.py     # Wake word processing
 │   ├── utils/             # Utility functions
+│   │   └── types.py       # Type definitions and protocols
 │   └── assets/            # Sound files and resources
-├── tests/                 # Test suite
+│       └── bing.mp3       # Activation sound
 ├── requirements.txt       # Python dependencies
-└── .env                  # Environment configuration
+└── .env                # Environment configuration
 ```
 
 ## Configuration
