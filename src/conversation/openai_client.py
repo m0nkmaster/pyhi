@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-3.5-turbo"
+    model: str = "gpt-4-turbo"
     max_tokens: int = 150
     temperature: float = 0.7
 

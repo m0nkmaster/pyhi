@@ -6,6 +6,7 @@ from openai import OpenAI
 import wave
 from ..utils.types import WakeWordDetector, AudioConfig
 from ..config import WakeWordConfig
+import io
 
 class WhisperWakeWordDetector(WakeWordDetector):
     def __init__(
@@ -46,19 +47,23 @@ class WhisperWakeWordDetector(WakeWordDetector):
     
     def detect(self, audio_data: bytes) -> bool:
         """Detect if the wake word is present in the audio data."""
-        temp_file = "temp_wake_word.wav"
         try:
-            with wave.open(temp_file, "wb") as wf:
+            # Check minimum size
+            if len(audio_data) < self.config.min_audio_size:
+                return False
+            
+            # Create in-memory WAV file
+            wav_buffer = io.BytesIO()
+            with wave.open(wav_buffer, "wb") as wf:
                 wf.setnchannels(self.audio_config.channels)
                 wf.setsampwidth(2)
                 wf.setframerate(self.audio_config.sample_rate)
                 wf.writeframes(audio_data)
             
-            # Check minimum file size
-            if os.path.getsize(temp_file) < self.config.min_audio_size:
-                return False
+            # Get the WAV data and rewind buffer
+            wav_buffer.seek(0)
             
-            transcript = self._transcribe_audio(temp_file)
+            transcript = self._transcribe_audio(wav_buffer)
             if not transcript:
                 return False
             
@@ -83,22 +88,18 @@ class WhisperWakeWordDetector(WakeWordDetector):
         except Exception as e:
             print(f"Error in wake word detection: {e}")
             return False
-        finally:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
     
-    def _transcribe_audio(self, audio_file: str) -> Optional[str]:
-        """Transcribe audio file using Whisper API."""
+    def _transcribe_audio(self, audio_data: io.BytesIO) -> Optional[str]:
+        """Transcribe audio data using Whisper API."""
         try:
-            with open(audio_file, "rb") as audio:
-                transcript = self.client.audio.transcriptions.create(
-                    model=self.config.model,
-                    file=audio,
-                    language=self.config.language,
-                    response_format="text",
-                    temperature=self.config.temperature
-                )
+            transcript = self.client.audio.transcriptions.create(
+                model=self.config.model,
+                file=("audio.wav", audio_data),  # Pass as tuple with filename and data
+                language=self.config.language,
+                response_format="text",
+                temperature=self.config.temperature
+            )
             return transcript
         except Exception as e:
             print(f"Error transcribing audio: {e}")
-            return None 
+            return None
