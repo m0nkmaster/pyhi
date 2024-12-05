@@ -1,0 +1,54 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.0, pytest-8.3.4, pluggy-1.5.0 -- /Users/robmacdonald/.pyenv/versions/chat-button/bin/python3.13
+cachedir: .pytest_cache
+rootdir: /Users/robmacdonald/Documents/projects/pyhi
+configfile: pyproject.toml
+plugins: cov-6.0.0, anyio-3.7.1
+collecting ... collected 21 items
+
+tests/test_app.py::test_init_with_default_config PASSED                  [  4%]
+tests/test_app.py::test_init_with_custom_config PASSED                   [  9%]
+tests/test_app.py::test_is_speech PASSED                                 [ 14%]
+tests/test_app.py::test_is_speech_error PASSED                           [ 19%]
+tests/test_app.py::test_init_no_activation_sound PASSED                  [ 23%]
+tests/test_app.py::test_check_timeout_not_timed_out PASSED               [ 28%]
+tests/test_app.py::test_check_timeout_timed_out PASSED                   [ 33%]
+tests/test_app.py::test_cleanup PASSED                                   [ 38%]
+tests/test_app.py::test_cleanup_error PASSED                             [ 42%]
+tests/test_app.py::test_listen_for_trigger_word_detected PASSED          [ 47%]
+tests/test_app.py::test_listen_for_trigger_word_not_detected PASSED      [ 52%]
+tests/test_app.py::test_record_user_input_success PASSED                 [ 57%]
+tests/test_app.py::test_record_user_input_no_speech PASSED               [ 61%]
+tests/test_app.py::test_run_conversation_flow PASSED                     [ 66%]
+tests/test_app.py::test_run_transcription_error PASSED                   [ 71%]
+tests/test_app.py::test_run_chat_completion_error PASSED                 [ 76%]
+tests/test_app.py::test_run_tts_error PASSED                             [ 80%]
+tests/test_app.py::test_run_audio_playback_error PASSED                  [ 85%]
+tests/test_app.py::test_main_no_api_key PASSED                           [ 90%]
+tests/test_app.py::test_main_with_api_key PASSED                         [ 95%]
+tests/test_app.py::test_main_error PASSED                                [100%]
+
+---------- coverage: platform darwin, python 3.13.0-final-0 ----------
+Name                                Stmts   Miss  Cover   Missing
+-----------------------------------------------------------------
+src/__init__.py                         1      0   100%
+src/_config-mac.py                     53     53     0%   1-72
+src/_config-raspberry-pi.py            52     52     0%   1-72
+src/app.py                            161     43    73%   110-115, 121-164, 179-180, 191-192, 221, 265
+src/audio/__init__.py                   0      0   100%
+src/audio/analyzer.py                  26     21    19%   6, 15-28, 43-60
+src/audio/player.py                    41     24    41%   24, 28-34, 40-52, 56-68
+src/audio/recorder.py                 130     81    38%   46, 54, 77-79, 83-102, 114-191, 196-200, 205-206
+src/config.py                          53      1    98%   11
+src/conversation/__init__.py            0      0   100%
+src/conversation/manager.py            33     12    64%   38, 47, 56, 63, 74-77, 86-89
+src/conversation/openai_client.py      46     26    43%   45-55, 68-93, 112-124
+src/utils/__init__.py                   0      0   100%
+src/utils/types.py                     35     13    63%   8-9, 14, 18, 23, 28, 33, 38, 42, 46, 50, 54, 58
+src/word_detection/__init__.py          0      0   100%
+src/word_detection/detector.py         63     34    46%   46, 50-90, 94-105
+-----------------------------------------------------------------
+TOTAL                                 694    360    48%
+
+
+============================== 21 passed in 0.68s ==============================
