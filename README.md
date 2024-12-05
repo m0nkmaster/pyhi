@@ -10,13 +10,17 @@ A Python-based voice assistant that enables natural conversations with ChatGPT u
 - Automatic session management with configurable timeouts
 - Cross-platform audio playback support
 - Configurable wake words and audio settings
+- Speech detection and analysis
+- System audio integration
 
 ## Prerequisites
 
 - Python 3.9 or higher
 - OpenAI API key
-- Microphone
+- Microphone for voice input
 - Audio output device (speakers/headphones)
+- Operating system: Windows, macOS, or Linux
+- Required system packages for PyAudio (platform-specific)
 
 ## Installation
 
@@ -36,68 +40,122 @@ pip install -r requirements.txt
 OPENAI_API_KEY=your_api_key_here
 ```
 
-## Usage
+### Platform-Specific Setup
 
-Run the assistant:
+#### macOS
 ```bash
-python -m src.app
+brew install portaudio
 ```
 
-Say any of the wake words (e.g., "Hey Chat", "Hi Chat") to begin a conversation. The assistant will play an activation sound and listen for your input. After responding, it will wait for 30 seconds (configurable) before going back to sleep.
+#### Linux (Ubuntu/Debian)
+```bash
+sudo apt-get install python3-pyaudio portaudio19-dev
+```
 
-## Architecture
+#### Windows
+PyAudio should install directly through pip. If issues occur, use the appropriate wheel from [PyAudio Wheels](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio).
 
-```mermaid
-graph TD
-    A[VoiceAssistant] --> B[AudioRecorder]
-    A --> C[WakeWordDetector]
-    A --> D[ConversationManager]
-    A --> E[AudioPlayer]
-    
-    B --> F[PyAudio]
-    C --> G[Whisper API]
-    D --> H[ChatGPT API]
-    D --> I[TTS API]
-    
-    subgraph OpenAI APIs
-        G
-        H
-        I
-    end
-    
-    subgraph Audio System
-        F
-        E
-    end
+## Project Structure
+
+```
+pyhi/
+├── src/
+│   ├── app.py              # Main application entry point
+│   ├── config.py           # Configuration classes
+│   ├── audio/              # Audio recording and playback
+│   │   ├── analyzer.py     # Speech analysis
+│   │   ├── player.py       # Audio playback
+│   │   └── recorder.py     # Audio recording
+│   ├── conversation/       # Chat functionality
+│   │   ├── manager.py      # Conversation management
+│   │   └── openai_client.py # OpenAI API integration
+│   ├── wake_word/         # Wake word detection
+│   │   └── detector.py     # Wake word processing
+│   ├── utils/             # Utility functions
+│   └── assets/            # Sound files and resources
+├── tests/                 # Test suite
+├── requirements.txt       # Python dependencies
+└── .env                  # Environment configuration
 ```
 
 ## Configuration
 
-The application can be configured through several configuration classes in `src/config.py`:
+The application is highly configurable through several configuration classes in `src/config.py`. Primary configurations include:
 
-- `AppConfig`: General application settings (timeout, wake words)
-- `AudioConfig`: Audio recording parameters
-- `ChatConfig`: ChatGPT API settings
-- `TTSConfig`: Text-to-speech settings
-- `WakeWordConfig`: Wake word detection parameters
+### AppConfig
+- `timeout_seconds`: Conversation timeout duration
+- `wake_words`: List of wake word phrases
+
+### AudioConfig
+- Sample rate
+- Chunk size
+- Audio format settings
+
+### ChatConfig
+- GPT model settings
+- Temperature
+- System prompts
+
+### TTSConfig
+- Voice selection
+- Speech parameters
+
+### WakeWordConfig
+- Detection sensitivity
+- Processing parameters
+
+## Usage
+
+1. Start the assistant:
+```bash
+python -m src.app
+```
+[Here](CONFIG.md) is a full configuration breakdown.
+
+2. Activate with wake words:
+   - Say any configured wake word (default: "Hey Chat", "Hi Chat")
+   - Wait for the activation sound
+   - Speak your command or question
+
+3. Interaction:
+   - The assistant will process your speech using Whisper
+   - Generate a response using ChatGPT
+   - Convert the response to speech using OpenAI's TTS
+   - Play the response through your system audio
+
+4. Session Management:
+   - After each response, the assistant waits for the configured timeout period
+   - If no new input is detected, it returns to wake word detection mode
+   - You can start a new conversation at any time with a wake word
 
 ## Development
 
-The project uses a modular architecture with clear separation of concerns:
+### Adding New Features
+1. Create new modules in the appropriate directory
+2. Update configuration in `config.py`
+3. Integrate with `VoiceAssistant` class in `app.py`
+4. Add tests in the `tests/` directory
 
-- `src/audio/`: Audio recording and playback
-- `src/conversation/`: Chat management and OpenAI API integration
-- `src/wake_word/`: Wake word detection
-- `src/utils/`: Common utilities and type definitions
-
-See our [Development Roadmap](./ROADMAP.md) for planned features and improvements.
-
-## Testing
-
+### Testing
 Run the test suite:
 ```bash
 pytest tests/
 ```
+
+### Common Issues
+- Audio device not found: Check system audio settings and permissions
+- OpenAI API errors: Verify API key and network connection
+- PyAudio installation: Follow platform-specific setup instructions
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+See our [Development Roadmap](./ROADMAP.md) for planned features and improvements.
 
 ## License
 
