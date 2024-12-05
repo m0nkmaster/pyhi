@@ -1,6 +1,6 @@
 # PyHi Configuration Guide
 
-This document provides a detailed breakdown of all configuration options available in PyHi. All configurations are defined in `src/config.py`.
+This document provides a detailed breakdown of all configuration options available in PyHi and their defaults. All configurations are defined in `src/config.py`.
 
 ## Environment Variables
 
@@ -35,7 +35,7 @@ Controls when to stop recording based on detected silence.
 ```python
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.5   # Seconds of silence before stopping wake word detection
+    wake_word_silence_threshold: float = 0.0   # Seconds of silence before stopping wake word detection
     response_silence_threshold: float = 0.5     # Seconds of silence before stopping response recording
     buffer_duration: float = 0                  # Duration of audio buffer in seconds
 ```
@@ -56,14 +56,16 @@ class AudioConfig:
     channels: int = 1                 # Mono audio
     chunk_size: int = 256            # Processing chunk size
     format: int = pyaudio.paInt16    # 16-bit audio
-    input_device_index: int = 1      # Audio input device
-    use_plughw: bool = False         # Linux audio config
+    input_device_index: int | None = 1  # Audio input device
+    use_plughw: bool = False         # Linux audio config, deprecated
 ```
 
 #### Important Notes
-- `sample_rate`: 16kHz is optimal for Whisper
-- `chunk_size`: Lower values = faster processing but more CPU
-- `input_device_index`: May need adjustment based on system
+- `sample_rate`: 16kHz is standard for speech recognition and Whisper
+- `chunk_size`: Set to 256 for balance between latency and CPU usage
+- `input_device_index`: Device 2 is MacBook Pro Microphone (may vary by system)
+  - Set to None for simple auto-detection of first available input device
+  - Set to specific index (0,2,4 etc) for consistent device selection
 
 ### AudioPlayerConfig
 Audio output configuration.
@@ -72,9 +74,14 @@ Audio output configuration.
 @dataclass
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"           # Temporary audio file
-    activation_sound_path: str = "src/assets/bing.mp3"  # Wake word confirmation sound
-    output_device: str = ""                        # Audio output device
+    activation_sound_path: str = "src/assets/bing.mp3"  # Wake word sound
+    output_device: str = ""                        # Linux only: ALSA output device
 ```
+
+#### Important Notes
+- `temp_file`: Temporary file for audio playback (automatically cleaned up)
+- `activation_sound_path`: Sound played when wake word is detected
+- `output_device`: Only used on Linux with mpg123. On macOS/Windows, system default is used
 
 ### ChatConfig
 ChatGPT API configuration.
@@ -83,19 +90,13 @@ ChatGPT API configuration.
 @dataclass
 class ChatConfig:
     model: str = "gpt-4-turbo"        # GPT model selection
-    max_tokens: int = 75              # Maximum response length
+    max_completion_tokens: int = 75              # Maximum response length in tokens
     temperature: float = 0.7          # Response randomness
     system_prompt: str = "You are a helpful assistant. Respond briefly."
 ```
 
-#### Model Options
-- `gpt-4-turbo`: Latest GPT-4 model (recommended)
-- Can be changed to other available OpenAI models
-
-#### Temperature
-- 0.0: Most deterministic
-- 1.0: Most creative
-- 0.7: Balanced responses
+#### Important Notes
+[See OpenAI Chat API Documentation](https://platform.openai.com/docs/api-reference/chat/create)
 
 ### TTSConfig
 Text-to-Speech configuration.
@@ -104,34 +105,45 @@ Text-to-Speech configuration.
 @dataclass
 class TTSConfig:
     model: str = "tts-1"              # OpenAI TTS model
-    voice: str = "nova"               # Voice selection
+    voice: str = "fable"               # Voice selection
 ```
 
-#### Available Voices
-- "alloy": Neutral and balanced
-- "echo": Mature and deep
-- "fable": British accent
-- "onyx": Deep and authoritative
-- "nova": Warm and natural
-- "shimmer": Clear and expressive
+#### Available Voices (Dec 2024)
+[See OpenAI TTS Voice Options](https://platform.openai.com/docs/api-reference/audio/createSpeech)
 
-### WakeWordConfig
-Wake word detection settings using Whisper.
+### WordDetectionConfig
+Word detection settings using Whisper.
 
 ```python
 @dataclass
-class WakeWordConfig:
-    model: str = "whisper-1"          # Whisper model
+class WordDetectionConfig:
+    model: str = "whisper-1"          # Whisper model for speech recognition
     temperature: float = 0.0          # Transcription determinism
     language: str = "en"              # Language setting
     min_audio_size: int = 1024        # Minimum audio for processing
 ```
 
+#### Important Notes
+- Used for both wake word detection AND conversation transcription
+- `model`: Whisper-1 is OpenAI's speech recognition model
+  - Used for both wake word detection and conversation transcription
+  - Provides high accuracy for English speech
+- `temperature`: Set to 0.0 for most consistent transcriptions
+  - Higher values (0.0-1.0) allow more transcription variations
+  - Keep at 0.0 for wake word detection reliability
+- `language`: Forces Whisper to expect specified language
+  - "en" optimizes for English recognition
+  - Can be changed for other languages
+- `min_audio_size`: Minimum bytes of audio before processing
+  - Prevents processing of too-short audio snippets
+  - Lower values = faster response but may catch partial words
+- [See Whisper Documentation](https://platform.openai.com/docs/api-reference/audio/createTranscription)
+
 ## Optimization Tips
 
 ### For Faster Response
 - Reduce `chunk_size` in AudioConfig
-- Lower `max_tokens` in ChatConfig
+- Lower `max_completion_tokens` in ChatConfig
 - Adjust silence thresholds in AudioRecorderConfig
 
 ### For Better Accuracy
@@ -141,7 +153,7 @@ class WakeWordConfig:
 
 ### For Lower Resource Usage
 - Increase `chunk_size` to reduce processing frequency
-- Lower `max_tokens` in ChatConfig
+- Lower `max_completion_tokens` in ChatConfig
 - Use faster GPT models
 
 ## Troubleshooting
@@ -153,7 +165,7 @@ class WakeWordConfig:
 
 ### Performance Issues
 1. Adjust chunk_size based on CPU capacity
-2. Reduce max_tokens for faster responses
+2. Reduce max_completion_tokens for faster responses
 3. Consider using faster models
 
 ### Wake Word Detection

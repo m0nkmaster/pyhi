@@ -9,7 +9,7 @@ import wave
 from .audio.analyzer import is_speech
 from .audio.recorder import PyAudioRecorder
 from .audio.player import SystemAudioPlayer, AudioPlayerError
-from .wake_word.detector import WhisperWakeWordDetector
+from .word_detection.detector import WhisperWordDetector
 from .conversation.manager import ChatConversationManager
 from .conversation.openai_client import OpenAIWrapper
 from .config import (
@@ -19,16 +19,16 @@ from .config import (
     TTSConfig,
     AppConfig,
     AudioPlayerConfig,
-    WakeWordConfig
+    WordDetectionConfig
 )
 
 class VoiceAssistant:
-    def __init__(self, wake_words: list[str], timeout_seconds: float = 30.0):
+    def __init__(self, words: list[str], timeout_seconds: float = 30.0):
         """Initialize the voice assistant."""
         # Initialize configurations
         self.app_config = AppConfig(
             timeout_seconds=timeout_seconds,
-            wake_words=wake_words
+            words=words
         )
         
         self.audio_config = AudioConfig()
@@ -49,10 +49,10 @@ class VoiceAssistant:
             system_prompt="You are a helpful voice assistant. Please keep your responses concise and natural."
         )
         
-        self.wake_word_detector = WhisperWakeWordDetector(
+        self.word_detector = WhisperWordDetector(
             client=openai_client,
-            wake_words=wake_words,
-            config=WakeWordConfig(),
+            words=words,
+            config=WordDetectionConfig(),
             audio_config=self.audio_config
         )
         
@@ -92,8 +92,8 @@ class VoiceAssistant:
     
     def run(self):
         """Run the voice assistant main loop."""
-        print(f"Voice Assistant is ready! Say one of the wake words to begin...")
-        print(f"Wake words: {', '.join(self.wake_word_detector.wake_words)}")
+        print(f"Voice Assistant is ready! Say one of the trigger words to begin...")
+        print(f"Detection words: {', '.join(self.word_detector.words)}")
         print("Press Ctrl+C to quit")
         
         try:
@@ -101,16 +101,16 @@ class VoiceAssistant:
                 # Check for timeout when awake
                 if self.is_awake:
                     if self._check_timeout():
-                        print("\nGoing back to sleep. Say a wake word to start a new conversation.")
+                        print("\nGoing back to sleep. Say a trigger word to start a new conversation.")
                         self.is_awake = False
                         self.last_interaction = None
                         continue
                     time.sleep(0.1)  # Small delay to prevent CPU spinning
                 
                 if not self.is_awake:
-                    # Listen for wake word
-                    print("\nStarting wake word detection cycle...")
-                    if self._listen_for_wake_word():
+                    # Listen for trigger word
+                    print("\nStarting trigger word detection cycle...")
+                    if self._listen_for_trigger_word():
                         self.is_awake = True
                         self.last_interaction = datetime.now()
                         continue
@@ -161,9 +161,9 @@ class VoiceAssistant:
         finally:
             self._cleanup()
     
-    def _listen_for_wake_word(self) -> bool:
-        """Listen for wake word activation."""
-        print("\rListening for wake word...", end="", flush=True)
+    def _listen_for_trigger_word(self) -> bool:
+        """Listen for trigger word activation."""
+        print("\rListening for trigger word...", end="", flush=True)
         
         self.audio_recorder.start_recording()
         audio_data = self.audio_recorder.stop_recording(is_wake_word_mode=True)
@@ -172,18 +172,18 @@ class VoiceAssistant:
             print("No audio data recorded")
             return False
         
-        # Save audio for wake word detection
+        # Save audio for trigger word detection
         with open("recording.wav", "wb") as f:
             f.write(audio_data)
         
-        # Check for wake word
-        if self.wake_word_detector.detect(audio_data):
+        # Check for trigger word
+        if self.word_detector.detect(audio_data):
             try:
-                print("Wake word detected! Playing activation sound...")
+                print("Trigger word detected! Playing activation sound...")
                 self.audio_player.play(self.activation_sound)
             except AudioPlayerError:
                 print("Failed to play activation sound")
-            print("\nWake word detected! How can I help you?")
+            print("\nTrigger word detected! How can I help you?")
             return True
         
         return False
@@ -239,8 +239,8 @@ def main():
         print("Error: OPENAI_API_KEY not found in environment variables")
         return 1
     
-    # Load wake words from config
-    wake_words = [
+    # Load trigger words from config
+    trigger_words = [
         "hey chat",
         "hey, chat",
         "hi chat",
@@ -271,7 +271,7 @@ def main():
         "stay, chat"
     ]
     
-    assistant = VoiceAssistant(wake_words=wake_words)
+    assistant = VoiceAssistant(words=trigger_words)
     assistant.run()
     return 0
 

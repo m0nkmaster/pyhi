@@ -98,7 +98,7 @@ class PyAudioRecorder:
         Stop recording and return the recorded audio data.
         
         Args:
-            is_wake_word_mode: Whether we're recording for wake word detection
+            is_wake_word_mode: Whether we're recording for word detection
         
         Returns:
             bytes: The recorded audio data
@@ -116,7 +116,7 @@ class PyAudioRecorder:
             silence_threshold = (self.wake_word_silence_threshold if is_wake_word_mode 
                                else self.response_silence_threshold)
             
-            print("\nRecording..." if not is_wake_word_mode else "Listening for wake word...")
+            print("\nRecording..." if not is_wake_word_mode else "Listening for trigger word...")
             
             while True:
                 try:
@@ -124,7 +124,7 @@ class PyAudioRecorder:
                 except IOError:
                     continue
                 
-                # Maintain rolling buffer for wake word detection
+                # Maintain rolling buffer for word detection
                 if is_wake_word_mode:
                     self.audio_buffer.append(data)
                     if len(self.audio_buffer) > self.buffer_size:

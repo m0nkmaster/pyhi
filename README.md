@@ -100,7 +100,7 @@ The application is highly configurable through several configuration classes in 
 - Voice selection
 - Speech parameters
 
-### WakeWordConfig
+### WordDetectionConfig
 - Detection sensitivity
 - Processing parameters
 

@@ -4,29 +4,29 @@ import os
 from difflib import SequenceMatcher
 from openai import OpenAI
 import wave
-from ..utils.types import WakeWordDetector, AudioConfig
-from ..config import WakeWordConfig
+from ..utils.types import WordDetector, AudioConfig
+from ..config import WordDetectionConfig
 import io
 
-class WhisperWakeWordDetector(WakeWordDetector):
+class WhisperWordDetector(WordDetector):
     def __init__(
         self,
         client: OpenAI,
-        wake_words: List[str],
-        config: Optional[WakeWordConfig] = None,
+        words: List[str],
+        config: Optional[WordDetectionConfig] = None,
         audio_config: Optional[AudioConfig] = None
     ):
-        """Initialize the Whisper-based wake word detector."""
+        """Initialize the Whisper-based word detector."""
         self.client = client
-        self.wake_words = self._prepare_wake_words(wake_words)
-        self.config = config or WakeWordConfig()
+        self.words = self._prepare_words(words)
+        self.config = config or WordDetectionConfig()
         self.audio_config = audio_config or AudioConfig()
         self.similarity_threshold = 0.85  # Adjust this value between 0 and 1
     
-    def _prepare_wake_words(self, wake_words: List[str]) -> List[str]:
-        """Prepare wake words with variations."""
+    def _prepare_words(self, words: List[str]) -> List[str]:
+        """Prepare words with variations."""
         cleaned_words = set()
-        for word in wake_words:
+        for word in words:
             # Clean the original word
             cleaned = self._clean_text(word)
             cleaned_words.add(cleaned)
@@ -46,7 +46,7 @@ class WhisperWakeWordDetector(WakeWordDetector):
         return SequenceMatcher(None, str1, str2).ratio()
     
     def detect(self, audio_data: bytes) -> bool:
-        """Detect if the wake word is present in the audio data."""
+        """Detect if the word is present in the audio data."""
         try:
             # Check minimum size
             if len(audio_data) < self.config.min_audio_size:
@@ -71,22 +71,22 @@ class WhisperWakeWordDetector(WakeWordDetector):
             transcript = self._clean_text(transcript)
             print(f"Transcript: '{transcript}'")
             
-            # Check for wake word matches with fuzzy matching
-            for wake_word in self.wake_words:
-                similarity = self._calculate_similarity(transcript, wake_word)
+            # Check for word matches with fuzzy matching
+            for word in self.words:
+                similarity = self._calculate_similarity(transcript, word)
                 if similarity >= self.similarity_threshold:
-                    print(f"Wake word match: '{wake_word}' (similarity: {similarity:.2f})")
+                    print(f"Word match: '{word}' (similarity: {similarity:.2f})")
                     return True
                 
-                # Check if wake word is contained within a longer phrase
-                if wake_word in transcript:
-                    print(f"Wake word contained in transcript: '{wake_word}'")
+                # Check if word is contained within a longer phrase
+                if word in transcript:
+                    print(f"Word contained in transcript: '{word}'")
                     return True
             
             return False
             
         except Exception as e:
-            print(f"Error in wake word detection: {e}")
+            print(f"Error in word detection: {e}")
             return False
     
     def _transcribe_audio(self, audio_data: io.BytesIO) -> Optional[str]:

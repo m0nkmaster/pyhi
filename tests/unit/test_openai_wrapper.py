@@ -25,13 +25,13 @@ def mock_openai_client():
 def wrapper(mock_openai_client):
     return OpenAIWrapper(
         client=mock_openai_client,
-        chat_config=ChatConfig(model="test-model", max_tokens=100, temperature=0.5),
+        chat_config=ChatConfig(model="test-model", max_completion_tokens=100, temperature=0.5),
         tts_config=TTSConfig(model="test-tts", voice="test-voice")
     )
 
 def test_initialization(wrapper):
     assert wrapper.chat_config.model == "test-model"
-    assert wrapper.chat_config.max_tokens == 100
+    assert wrapper.chat_config.max_completion_tokens == 100
     assert wrapper.chat_config.temperature == 0.5
     assert wrapper.tts_config.model == "test-tts"
     assert wrapper.tts_config.voice == "test-voice"
@@ -49,7 +49,7 @@ def test_get_chat_completion(wrapper, mock_openai_client):
     mock_openai_client.chat.completions.create.assert_called_once_with(
         model="test-model",
         messages=messages,
-        max_tokens=100,
+        max_completion_tokens=100,
         temperature=0.5
     )
 

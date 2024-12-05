@@ -37,13 +37,12 @@ class AudioConfig:
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
     activation_sound_path: str = "src/assets/bing.mp3"
-    output_device: str = "hw:1,0"  # Default to Jabra headset, can be configured
-
+    output_device: str = "hw:1,0"  # Default only required for Linux
 
 @dataclass
 class ChatConfig:
     model: str = "gpt-3.5-turbo"
-    max_tokens: int = 150
+    max_completion_tokens: int = 150
     temperature: float = 0.7
 
 
@@ -54,7 +53,7 @@ class TTSConfig:
 
 
 @dataclass
-class WakeWordConfig:
+class WordDetectionConfig:
     model: str = "whisper-1"
     temperature: float = 0.2
     language: str = "en"
