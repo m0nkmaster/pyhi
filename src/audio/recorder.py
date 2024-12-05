@@ -24,51 +24,59 @@ class PyAudioRecorder:
         self.config = config
         self.analyzer = analyzer
         self.on_error = on_error or (lambda e: None)
-        self.audio = pyaudio.PyAudio()
         
-        # List all available devices
-        print("\nAvailable audio devices:")
-        input_devices = []
-        for i in range(self.audio.get_device_count()):
-            dev_info = self.audio.get_device_info_by_index(i)
-            if dev_info['maxInputChannels'] > 0:  # Only show input devices
-                input_devices.append(i)
-                print(f"Device {i}: {dev_info['name']}")
-                print(f"    Input channels: {dev_info['maxInputChannels']}")
-                print(f"    Sample rate: {dev_info['defaultSampleRate']}")
-        print()
-        
-        # If no device index specified, use the first available input device
-        if self.config.input_device_index is None and input_devices:
-            self.config.input_device_index = input_devices[0]
-        
-        # Get info for configured device
-        device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
-        print(f"Selected device info: {device_info}")
-        
-        if device_info['maxInputChannels'] == 0:
-            raise ValueError(f"Selected device {self.config.input_device_index} has no input channels. Please choose a valid input device.")
-        
-        # Use the device's native channels and sample rate
-        self.config.channels = int(device_info['maxInputChannels'])
-        self.config.sample_rate = int(device_info['defaultSampleRate'])
-        
-        # Use provided config or defaults
-        recorder_config = recorder_config or AudioRecorderConfig()
-        
-        # Speech detection state
-        self.speech_detection_buffer = []
-        self.silence_counter = 0
-        self.session_silence_counter = 0
-        self.is_recording = False
-        
-        # Silence thresholds
-        self.wake_word_silence_threshold = recorder_config.wake_word_silence_threshold
-        self.response_silence_threshold = recorder_config.response_silence_threshold
-        
-        # Calculate buffer size in chunks
-        chunks_per_second = self.config.sample_rate / self.config.chunk_size
-        self.buffer_size = int(chunks_per_second * recorder_config.buffer_duration)
+        try:
+            self.audio = pyaudio.PyAudio()
+            
+            # List all available devices
+            print("\nAvailable audio devices:")
+            input_devices = []
+            for i in range(self.audio.get_device_count()):
+                dev_info = self.audio.get_device_info_by_index(i)
+                if dev_info['maxInputChannels'] > 0:  # Only show input devices
+                    input_devices.append(i)
+                    print(f"Device {i}: {dev_info['name']}")
+                    print(f"    Input channels: {dev_info['maxInputChannels']}")
+                    print(f"    Sample rate: {dev_info['defaultSampleRate']}")
+            print()
+            
+            # If no device index specified, use the first available input device
+            if self.config.input_device_index is None:
+                if not input_devices:
+                    raise ValueError("No input devices found. Please connect a microphone or audio input device.")
+                self.config.input_device_index = input_devices[0]
+            
+            # Get info for configured device
+            device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
+            print(f"Selected device info: {device_info}")
+            
+            if device_info['maxInputChannels'] == 0:
+                raise ValueError(f"Selected device {self.config.input_device_index} has no input channels. Please choose a valid input device.")
+            
+            # Use the device's native channels and sample rate
+            self.config.channels = int(device_info['maxInputChannels'])
+            self.config.sample_rate = int(device_info['defaultSampleRate'])
+            
+            # Use provided config or defaults
+            recorder_config = recorder_config or AudioRecorderConfig()
+            
+            # Speech detection state
+            self.speech_detection_buffer = []
+            self.silence_counter = 0
+            self.session_silence_counter = 0
+            self.is_recording = False
+            
+            # Silence thresholds
+            self.wake_word_silence_threshold = recorder_config.wake_word_silence_threshold
+            self.response_silence_threshold = recorder_config.response_silence_threshold
+            
+            # Calculate buffer size in chunks
+            chunks_per_second = self.config.sample_rate / self.config.chunk_size
+            self.buffer_size = int(chunks_per_second * recorder_config.buffer_duration)
+            
+        except Exception as e:
+            self.on_error(e)
+            raise
     
     def start_recording(self) -> None:
         """Start recording audio."""
@@ -121,8 +129,14 @@ class PyAudioRecorder:
             while True:
                 try:
                     data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
+                    if not data:  # Stop if we get empty data
+                        break
                 except IOError:
                     continue
+                
+                # Always collect frames in non-wake-word mode
+                if not is_wake_word_mode:
+                    frames.append(data)
                 
                 # Maintain rolling buffer for word detection
                 if is_wake_word_mode:
@@ -143,21 +157,25 @@ class PyAudioRecorder:
                         if is_wake_word_mode:
                             # Include buffer content when speech starts
                             frames.extend(self.audio_buffer)
-                        silence_counter = 0
-                
-                if is_recording:
-                    frames.append(data)
+                            frames.append(data)
+                    elif is_wake_word_mode:
+                        frames.append(data)
+                    silence_counter = 0
                 
                 # Handle silence detection
-                if not any(speech_detection_buffer[-2:]):  # Use last 2 chunks for silence detection
+                if len(speech_detection_buffer) >= 2 and not any(speech_detection_buffer[-2:]):
                     silence_counter += self.config.chunk_size / self.config.sample_rate
                     if silence_counter >= silence_threshold:
-                        break
+                        if not is_wake_word_mode or is_recording:
+                            break
                 else:
                     silence_counter = 0
             
             self.stream.stop_stream()
-            self.stream.close()
+            try:
+                self.stream.close()
+            except Exception as e:
+                self.on_error(e)
             self.stream = None
             
             return b''.join(frames)
