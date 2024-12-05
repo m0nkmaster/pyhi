@@ -13,16 +13,16 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.7  # More sensitive silence detection
-    response_silence_threshold: float = 1.0    # Shorter silence threshold
-    buffer_duration: float = 0              # Shorter buffer for quicker response
+    wake_word_silence_threshold: float = 0.7
+    response_silence_threshold: float = 0.5    # Reduced for faster response detection
+    buffer_duration: float = 0
 
 
 @dataclass
 class AudioConfig:
     sample_rate: int = 16000
     channels: int = 1
-    chunk_size: int = 512
+    chunk_size: int = 256  # Reduced from 512 for faster processing
     format: int = pyaudio.paInt16
     input_device_index: int = 1
     use_plughw: bool = False
@@ -41,15 +41,16 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-3.5-turbo"
-    max_tokens: int = 150
+    model: str = "gpt-3.5-turbo-16k"  # Using faster model
+    max_tokens: int = 75  # Further reduced for even quicker responses
     temperature: float = 0.7
+    system_prompt: str = "You are a helpful assistant. Respond briefly."  # Added system prompt for brevity
 
 
 @dataclass
 class TTSConfig:
     model: str = "tts-1"
-    voice: str = "nova"
+    voice: str = "alloy"  # Changed from nova to alloy for faster processing
 
 
 @dataclass
@@ -57,7 +58,7 @@ class WakeWordConfig:
     model: str = "whisper-1"
     temperature: float = 0.0
     language: str = "en"
-    min_audio_size: int = 2048
+    min_audio_size: int = 1024  # Reduced from 2048 for faster processing
 
 
 @dataclass

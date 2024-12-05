@@ -145,12 +145,10 @@ class VoiceAssistant:
                     
                     # Convert response to speech and play it
                     print("Converting response to speech...")
-                    if self.openai_wrapper.text_to_speech(response):
+                    audio_data = self.openai_wrapper.text_to_speech(response)
+                    if audio_data:
                         try:
                             print("Playing response...")
-                            # Read the entire MP3 file
-                            with open("response.mp3", "rb") as f:
-                                audio_data = f.read()
                             self.audio_player.play(audio_data)
                             print("Response playback complete")
                         except AudioPlayerError as e:

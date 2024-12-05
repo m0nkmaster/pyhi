@@ -54,7 +54,7 @@ class OpenAIWrapper:
             print(f"Error getting chat completion: {e}")
             return None
     
-    def text_to_speech(self, text: str, output_file: str = "response.mp3") -> bool:
+    def text_to_speech(self, text: str, output_file: str = "response.mp3") -> Optional[bytes]:
         """
         Convert text to speech using OpenAI's TTS API.
         
@@ -63,27 +63,34 @@ class OpenAIWrapper:
             output_file: Path to save the audio file
         
         Returns:
-            bool: True if successful, False otherwise
+            Optional[bytes]: Audio data if successful, None if failed
         """
         if not text:
             print("No text to convert to speech")
-            return False
+            return None
         
         try:
             print("Requesting TTS from OpenAI...")
             response = self.client.audio.speech.create(
                 model=self.tts_config.model,
                 voice=self.tts_config.voice,
-                input=text
+                input=text,
+                speed=1.2,  # Slightly faster playback
+                response_format="mp3"  # Explicit format
             )
             
-            print(f"Saving audio response to {output_file}")
-            response.stream_to_file(output_file)
-            return True
+            # Get audio data directly in memory
+            audio_data = response.read()
+            
+            # Save to file for backup/debugging
+            with open(output_file, "wb") as f:
+                f.write(audio_data)
+            
+            return audio_data
             
         except Exception as e:
             print(f"Error converting text to speech: {e}")
-            return False
+            return None
     
     def transcribe_audio(
         self,
