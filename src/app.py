@@ -88,10 +88,14 @@ class VoiceAssistant:
     
     def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
         """Implement AudioAnalyzer protocol."""
-        result = is_speech(audio_data, config)
-        if result:
-            print("\rSpeech detected!", end="", flush=True)
-        return result
+        try:
+            result = is_speech(audio_data, config)
+            if result:
+                print("\rSpeech detected!", end="", flush=True)
+            return result
+        except Exception as e:
+            print(f"\rSpeech detection error: {e}", end="", flush=True)
+            return False
     
     def run(self):
         """Run the voice assistant main loop."""
@@ -242,16 +246,20 @@ def main():
         print("Error: OPENAI_API_KEY not found in environment variables")
         return 1
     
-    # Create AppConfig with default configuration
-    app_config = AppConfig()
-    
-    # Initialize assistant with config values
-    assistant = VoiceAssistant(
-        words=app_config.words,
-        timeout_seconds=app_config.timeout_seconds
-    )
-    assistant.run()
-    return 0
+    try:
+        # Create AppConfig with default configuration
+        app_config = AppConfig()
+        
+        # Initialize assistant with config values
+        assistant = VoiceAssistant(
+            words=app_config.words,
+            timeout_seconds=app_config.timeout_seconds
+        )
+        assistant.run()
+        return 0
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
 
 if __name__ == "__main__":
     exit(main()) 
