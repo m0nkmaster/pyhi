@@ -22,7 +22,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y portaudio19-dev python3-pyaudio libasound2-dev
+        sudo apt-get install -y portaudio19-dev python3-pyaudio libasound2-dev mpg123
         
     - name: Install dependencies
       run: |
@@ -34,6 +34,7 @@ jobs:
     - name: Verify audio setup
       run: |
         python -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()"
+        which mpg123
         
     - name: Run tests
       env:
