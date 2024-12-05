@@ -41,7 +41,7 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-3.5-turbo-16k"  # Using faster model
+    model: str = "gpt-4-turbo"  # Using faster model
     max_tokens: int = 75  # Further reduced for even quicker responses
     temperature: float = 0.7
     system_prompt: str = "You are a helpful assistant. Respond briefly."  # Added system prompt for brevity
@@ -50,8 +50,7 @@ class ChatConfig:
 @dataclass
 class TTSConfig:
     model: str = "tts-1"
-    voice: str = "alloy"  # Changed from nova to alloy for faster processing
-
+    voice: str = "nova" # "alloy", "echo", "fable", "onyx", "nova", "shimmer"
 
 @dataclass
 class WakeWordConfig:
