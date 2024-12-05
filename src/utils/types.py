@@ -1,24 +1,30 @@
-from typing import Protocol, List, Optional
+from typing import Protocol, List, Dict, Optional, Callable
 from dataclasses import dataclass
-from ..config import AudioConfig  # Import from config instead
+from ..config import AudioConfig
 
 @dataclass
-class AudioFrame:
-    data: bytes
-    is_speech: bool
+class AudioFrame(object):
+    def __init__(self, data: bytes, is_speech: bool):
+        self.data = data
+        self.is_speech = is_speech
 
 class AudioRecorder(Protocol):
     def start_recording(self) -> None:
         """Start recording audio."""
         ...
     
-    def stop_recording(self) -> bytes:
+    def stop_recording(self, is_wake_word_mode: bool = False) -> bytes:
         """Stop recording and return the recorded audio data."""
         ...
 
 class AudioAnalyzer(Protocol):
     def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
         """Analyze audio data to determine if it contains speech."""
+        ...
+
+class AudioPlayer(Protocol):
+    def play(self, audio_data: bytes) -> None:
+        """Play audio data."""
         ...
 
 class WordDetector(Protocol):
@@ -35,20 +41,18 @@ class ConversationManager(Protocol):
         """Add an assistant message to the conversation history."""
         ...
     
-    def get_conversation_history(self) -> List[dict]:
+    def get_conversation_history(self) -> List[Dict[str, str]]:
         """Get the full conversation history."""
         ...
     
     def clear_history(self) -> None:
         """Clear the conversation history."""
         ...
-
-class TextToSpeech(Protocol):
-    def synthesize(self, text: str) -> bytes:
-        """Convert text to speech audio data."""
+    
+    def get_last_user_message(self) -> Optional[str]:
+        """Get the most recent user message."""
         ...
-
-class AudioPlayer(Protocol):
-    def play(self, audio_data: bytes) -> None:
-        """Play audio data."""
-        ... 
+    
+    def get_last_assistant_message(self) -> Optional[str]:
+        """Get the most recent assistant message."""
+        ...
