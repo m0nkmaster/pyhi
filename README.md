@@ -35,7 +35,12 @@ cd pyhi
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file in the project root:
+3. For development/testing, install additional dependencies:
+```bash
+pip install -r requirements-test.txt
+```
+
+4. Create a `.env` file in the project root:
 ```bash
 OPENAI_API_KEY=your_api_key_here
 ```
@@ -140,9 +145,21 @@ python -m src.app
 4. Add tests in the `tests/` directory
 
 ### Testing
+Install test dependencies:
+```bash
+pip install -r requirements-test.txt
+```
+
 Run the test suite:
 ```bash
+# Run all tests
 pytest tests/
+
+# Run with coverage report
+pytest tests/ --cov=src
+
+# Run specific test file
+pytest tests/unit/test_audio_analyzer.py -v
 ```
 
 ### Common Issues
