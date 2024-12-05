@@ -73,22 +73,42 @@ def mock_cleanup_assistant(assistant):
 def test_init_with_default_config(mock_openai):
     """Test initialization with default configuration."""
     with patch('builtins.open', mock_open()):
-        assistant = VoiceAssistant(words=['hey'])
-    
-    assert assistant.app_config.words == ['hey']
-    assert assistant.app_config.timeout_seconds == AppConfig().timeout_seconds
-    assert assistant.app_config.temp_recording_path == 'recording.wav'
-    assert assistant.app_config.temp_response_path == 'response.mp3'
-    assert isinstance(assistant.audio_config, AudioConfig)
-    assert isinstance(assistant.audio_player_config, AudioPlayerConfig)
+        with patch('pyaudio.PyAudio') as mock_pyaudio:
+            # Mock device info
+            mock_device = {
+                'maxInputChannels': 2,
+                'defaultSampleRate': 44100,
+                'name': 'Test Device'
+            }
+            mock_pyaudio.return_value.get_device_count.return_value = 1
+            mock_pyaudio.return_value.get_device_info_by_index.return_value = mock_device
+            
+            assistant = VoiceAssistant(words=['hey'])
+            
+            assert assistant.app_config.words == ['hey']
+            assert assistant.app_config.timeout_seconds == AppConfig().timeout_seconds
+            assert assistant.app_config.temp_recording_path == 'recording.wav'
+            assert assistant.app_config.temp_response_path == 'response.mp3'
+            assert isinstance(assistant.audio_config, AudioConfig)
+            assert isinstance(assistant.audio_player_config, AudioPlayerConfig)
 
 def test_init_with_custom_config(mock_openai):
     """Test initialization with custom configuration."""
     with patch('builtins.open', mock_open()):
-        assistant = VoiceAssistant(words=['hey', 'hi'], timeout_seconds=10.0)
-    
-    assert assistant.app_config.words == ['hey', 'hi']
-    assert assistant.app_config.timeout_seconds == 10.0
+        with patch('pyaudio.PyAudio') as mock_pyaudio:
+            # Mock device info
+            mock_device = {
+                'maxInputChannels': 2,
+                'defaultSampleRate': 44100,
+                'name': 'Test Device'
+            }
+            mock_pyaudio.return_value.get_device_count.return_value = 1
+            mock_pyaudio.return_value.get_device_info_by_index.return_value = mock_device
+            
+            assistant = VoiceAssistant(words=['hey', 'hi'], timeout_seconds=10.0)
+            
+            assert assistant.app_config.words == ['hey', 'hi']
+            assert assistant.app_config.timeout_seconds == 10.0
 
 def test_is_speech(assistant):
     """Test speech detection."""
@@ -108,9 +128,19 @@ def test_is_speech_error(assistant):
 def test_init_no_activation_sound(mock_openai):
     """Test initialization when activation sound file is not found."""
     with patch('builtins.open', mock_open()) as mock_file:
-        mock_file.side_effect = FileNotFoundError()
-        assistant = VoiceAssistant(words=['hey'])
-        assert assistant.activation_sound is None
+        with patch('pyaudio.PyAudio') as mock_pyaudio:
+            # Mock device info
+            mock_device = {
+                'maxInputChannels': 2,
+                'defaultSampleRate': 44100,
+                'name': 'Test Device'
+            }
+            mock_pyaudio.return_value.get_device_count.return_value = 1
+            mock_pyaudio.return_value.get_device_info_by_index.return_value = mock_device
+            
+            mock_file.side_effect = FileNotFoundError()
+            assistant = VoiceAssistant(words=['hey'])
+            assert assistant.activation_sound is None
 
 def test_check_timeout_not_timed_out(assistant):
     """Test timeout check when not timed out."""
