@@ -55,7 +55,7 @@ class SystemAudioPlayer(AudioPlayer):
         """Play an audio file using the system's audio player."""
         try:
             if self._platform == 'darwin':
-                subprocess.run(['afplay', filename], check=True)
+                subprocess.run(['afplay', '-v', '0.5', filename], check=True)
             
             elif self._platform == 'linux':
                 subprocess.run(['mpg123', '-q', '-a', self.config.output_device, filename], check=True)
