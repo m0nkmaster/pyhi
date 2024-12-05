@@ -5,7 +5,7 @@ from dataclasses import dataclass
 @dataclass
 class ChatConfig:
     model: str = "gpt-4-turbo"
-    max_tokens: int = 150
+    max_completion_tokens: int = 150
     temperature: float = 0.7
 
 @dataclass
@@ -46,7 +46,7 @@ class OpenAIWrapper:
             response = self.client.chat.completions.create(
                 model=self.chat_config.model,
                 messages=messages,
-                max_tokens=self.chat_config.max_tokens,
+                max_completion_tokens=self.chat_config.max_completion_tokens,
                 temperature=self.chat_config.temperature
             )
             return response.choices[0].message.content

@@ -21,7 +21,7 @@ class AudioAnalyzer(Protocol):
         """Analyze audio data to determine if it contains speech."""
         ...
 
-class WakeWordDetector(Protocol):
+class WordDetector(Protocol):
     def detect(self, audio_data: bytes) -> bool:
         """Detect if the wake word is present in the audio data."""
         ...

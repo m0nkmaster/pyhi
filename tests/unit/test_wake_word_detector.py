@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock, patch, mock_open
-from src.wake_word.detector import WhisperWakeWordDetector
+from src.wake_word.detector import WhisperWordDetector
 
 @pytest.fixture
 def mock_openai_client():
@@ -15,7 +15,7 @@ def wake_words():
 
 @pytest.fixture
 def detector(mock_openai_client, wake_words):
-    return WhisperWakeWordDetector(
+    return WhisperWordDetector(
         client=mock_openai_client,
         wake_words=wake_words
     )
