@@ -24,7 +24,7 @@ class AudioConfig:
     channels: int = 1
     chunk_size: int = 256  # Reduced from 512 for faster processing
     format: int = pyaudio.paInt16
-    input_device_index: int = 1
+    input_device_index: int | None = 2
     use_plughw: bool = False
 
     def __post_init__(self):

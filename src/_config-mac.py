@@ -13,22 +13,21 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.7  # More sensitive silence detection
-    response_silence_threshold: float = 1.5    # Shorter silence threshold
-    buffer_duration: float = 0.5              # Shorter buffer for quicker response
+    wake_word_silence_threshold: float = 0.7
+    response_silence_threshold: float = 0.5    # Reduced for faster response detection
+    buffer_duration: float = 0
 
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 16000  # Lower sample rate for better speech recognition
+    sample_rate: int = 16000
     channels: int = 1
-    chunk_size: int = 512     # Smaller chunks for more frequent processing
+    chunk_size: int = 256  # Reduced from 512 for faster processing
     format: int = pyaudio.paInt16
-    input_device_index: int = 2
+    input_device_index: int | None = 2
     use_plughw: bool = False
 
     def __post_init__(self):
-        # Make these mutable so they can be updated based on device capabilities
         self.sample_rate = self.sample_rate
         self.channels = self.channels
 
@@ -42,23 +41,23 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-3.5-turbo"
-    max_tokens: int = 150
+    model: str = "gpt-4-turbo"  # Using faster model
+    max_tokens: int = 75  # Further reduced for even quicker responses
     temperature: float = 0.7
+    system_prompt: str = "You are a helpful assistant. Respond briefly."  # Added system prompt for brevity
 
 
 @dataclass
 class TTSConfig:
     model: str = "tts-1"
-    voice: str = "nova"
-
+    voice: str = "nova" # "alloy", "echo", "fable", "onyx", "nova", "shimmer"
 
 @dataclass
 class WakeWordConfig:
     model: str = "whisper-1"
-    temperature: float = 0.2
+    temperature: float = 0.0
     language: str = "en"
-    min_audio_size: int = 4096  # Minimum size in bytes for audio processing
+    min_audio_size: int = 1024  # Reduced from 2048 for faster processing
 
 
 @dataclass
