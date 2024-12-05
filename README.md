@@ -53,7 +53,7 @@ sudo apt-get install python3-pyaudio portaudio19-dev
 ```
 
 #### Windows
-PyAudio should install directly through pip. If issues occur, use the appropriate wheel from [PyAudio Wheels](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio).
+PyAudio should install directly through pip. If issues occur, use the appropriate wheel from [PyAudio Wheels](https://pypi.org/project/pyaudio-wheels/) (untested).
 
 ## Project Structure
 
