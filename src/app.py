@@ -23,12 +23,14 @@ from .config import (
 )
 
 class VoiceAssistant:
-    def __init__(self, words: list[str], timeout_seconds: float = 30.0):
+    def __init__(self, words: list[str], timeout_seconds: float | None = None):
         """Initialize the voice assistant."""
         # Initialize configurations
         self.app_config = AppConfig(
-            timeout_seconds=timeout_seconds,
-            words=words
+            words=words,
+            timeout_seconds=timeout_seconds or AppConfig().timeout_seconds,
+            temp_recording_path="recording.wav",
+            temp_response_path="response.mp3"
         )
         
         self.audio_config = AudioConfig()
@@ -45,8 +47,9 @@ class VoiceAssistant:
         )
         
         # Initialize conversation manager
+        self.chat_config = ChatConfig()
         self.conversation_manager = ChatConversationManager(
-            system_prompt="You are a helpful voice assistant. Please keep your responses concise and natural."
+            system_prompt=self.chat_config.system_prompt
         )
         
         self.word_detector = WhisperWordDetector(
@@ -239,39 +242,14 @@ def main():
         print("Error: OPENAI_API_KEY not found in environment variables")
         return 1
     
-    # Load trigger words from config
-    trigger_words = [
-        "hey chat",
-        "hey, chat",
-        "hi chat",
-        "hi, chat",
-        "hello chat",
-        "hello, chat",
-        "hey chat bot",
-        "hey chatbot",
-        "hi chatbot",
-        "hello chatbot",
-        "ok chat",
-        "okay chat",
-        "yo chat",
-        "chat.",
-        "chads.",
-        "hey chads",
-        "hey, chads",
-        "hi chads",
-        "hi, chads",
-        "hello chads",
-        "hello, chads",
-        "8 chat",
-        "chats.",
-        "chat",
-        "chats",
-        "stay chat",
-        
-        "stay, chat"
-    ]
+    # Create AppConfig with default configuration
+    app_config = AppConfig()
     
-    assistant = VoiceAssistant(words=trigger_words)
+    # Initialize assistant with config values
+    assistant = VoiceAssistant(
+        words=app_config.words,
+        timeout_seconds=app_config.timeout_seconds
+    )
     assistant.run()
     return 0
 

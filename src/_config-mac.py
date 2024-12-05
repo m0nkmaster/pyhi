@@ -24,7 +24,7 @@ class AudioConfig:
     channels: int = 1
     chunk_size: int = 256  # Reduced from 512 for faster processing
     format: int = pyaudio.paInt16
-    input_device_index: int | None = 2
+    input_device_index: int | None = None
     use_plughw: bool = False
 
     def __post_init__(self):
@@ -44,7 +44,7 @@ class ChatConfig:
     model: str = "gpt-4-turbo"  # Using faster model
     max_completion_tokens: int = 75  # Further reduced for even quicker responses
     temperature: float = 0.7
-    system_prompt: str = "You are a helpful assistant. Respond briefly."  # Added system prompt for brevity
+    system_prompt: str = "You think you are a Python, and we often talk about flying. You also like to poo everywhere,  you often say, Watch out, I'm a pigeon'.."  # Added system prompt for brevity
 
 
 @dataclass
@@ -62,20 +62,13 @@ class WordDetectionConfig:
 
 @dataclass
 class AppConfig:
-    timeout_seconds: float = 30.0
-    wake_words: list[str] | None = None
+    timeout_seconds: float = 10.0
+    words: list[str] | None = None
     temp_recording_path: str = "recording.wav"
     temp_response_path: str = "response.mp3"
 
     def __post_init__(self):
-        if self.wake_words is None:
-            self.wake_words = [
-                "hey chat", "hi chat", "hello chat",
-                "hey chatbot", "hi chatbot", "hello chatbot",
-                "chat", "chats", "hey chap", "hey chaps",
-                "hey Chad", "hi Chad", "hello Chad",
-                "hey Jack", "hey check", "hey chap",
-                "hey shot", "hay chat", "hey chair",
-                "hey that", "he chat", "hey chatty",
-                "hey chat bot", "hey chat!"
+        if self.words is None:
+            self.words = [
+                "hey chat"
             ]
