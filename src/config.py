@@ -44,7 +44,7 @@ class ChatConfig:
     model: str = "gpt-4-turbo"  # Using faster model
     max_completion_tokens: int = 75  # Further reduced for even quicker responses
     temperature: float = 0.7
-    system_prompt: str = "You are a helpful assistant. Respond briefly."  # Added system prompt for brevity
+    system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
 
 
 @dataclass
@@ -62,7 +62,7 @@ class WordDetectionConfig:
 
 @dataclass
 class AppConfig:
-    timeout_seconds: float = 30.0
+    timeout_seconds: float = 10.0
     words: list[str] | None = None
     temp_recording_path: str = "recording.wav"
     temp_response_path: str = "response.mp3"
