@@ -14,15 +14,15 @@ if not os.getenv("OPENAI_API_KEY"):
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.7
-    response_silence_threshold: float = 0.5    # Reduced for faster response detection
-    buffer_duration: float = 0
+    response_silence_threshold: float = 0.7
+    buffer_duration: float = 0.5  # Added 0.5 second buffer for minimum audio length
 
 
 @dataclass
 class AudioConfig:
     sample_rate: int = 16000
     channels: int = 1
-    chunk_size: int = 256  # Reduced from 512 for faster processing
+    chunk_size: int = 512  # Restored to original value for better detection accuracy
     format: int = pyaudio.paInt16
     input_device_index: int | None = None
     use_plughw: bool = False
@@ -44,7 +44,7 @@ class ChatConfig:
     model: str = "gpt-4-turbo"  # Using faster model
     max_completion_tokens: int = 75  # Further reduced for even quicker responses
     temperature: float = 0.7
-    system_prompt: str = "You think you are a Python, and we often talk about flying. You also like to poo everywhere,  you often say, Watch out, I'm a pigeon'.."  # Added system prompt for brevity
+    system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
 
 
 @dataclass
@@ -55,9 +55,15 @@ class TTSConfig:
 @dataclass
 class WordDetectionConfig:
     model: str = "whisper-1"
-    temperature: float = 0.0
+    temperature: float = 0.2  # Increased slightly for better word variation handling
     language: str = "en"
-    min_audio_size: int = 1024  # Reduced from 2048 for faster processing
+    min_audio_size: int = 2048  # Restored to original value for better accuracy
+
+
+@dataclass
+class APIConfig:
+    port: int = 1010
+    host: str = "0.0.0.0"
 
 
 @dataclass
@@ -70,5 +76,12 @@ class AppConfig:
     def __post_init__(self):
         if self.words is None:
             self.words = [
-                "hey chat"
+                "hey chat", "hi chat", "hello chat",
+                "hey chatbot", "hi chatbot", "hello chatbot",
+                "chat", "chats", "hey chap", "hey chaps",
+                "hey Chad", "hi Chad", "hello Chad",
+                "hey Jack", "hey check", "hey chap",
+                "hey shot", "hay chat", "hey chair",
+                "hey that", "he chat", "hey chatty",
+                "hey chat bot", "hey chat!"
             ]

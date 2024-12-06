@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pyaudio
 import os
 from dotenv import load_dotenv
@@ -13,63 +13,115 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 1.0  # Seconds of silence before ending wake word detection
-    response_silence_threshold: float = 2.0  # Seconds of silence before ending response recording
-    buffer_duration: float = 1.0  # Duration of audio buffer in seconds
+    wake_word_silence_threshold: float = 0.8
+    response_silence_threshold: float = 1.0
+    buffer_duration: float = 0.8
+    min_phrase_duration: float = 1.5
+    max_phrase_duration: float = 15.0
+
+
+@dataclass
+class AudioDeviceConfig:
+    # Device selection
+    auto_select_device: bool = True
+    preferred_input_device_name: str = "Jabra Link 370"  # Your Jabra device
+    preferred_output_device_name: str = "Jabra Link 370"  # Your Jabra device
+    fallback_to_default: bool = True
+    
+    # Audio quality - Based on Jabra Link 370 capabilities
+    preferred_sample_rates: list[int] = field(default_factory=lambda: [16000])  # Jabra supports 16kHz
+    preferred_channels: list[int] = field(default_factory=lambda: [1])  # Mono audio
+    
+    # Buffer settings
+    buffer_size_ms: int = 50  # Used to calculate chunk_size based on sample rate
+    
+    # Error handling
+    retry_on_error: bool = True
+    max_retries: int = 3
+    
+    # Debug options
+    list_devices_on_start: bool = True  # Set to True initially to verify device selection
+    debug_audio: bool = True  # Set to True initially to help diagnose any issues
+
+
+@dataclass
+class SpeechDetectionConfig:
+    # Base threshold for speech detection
+    base_threshold: int = 1000
+    
+    # Multipliers for different checks
+    loudness_multiplier: float = 1.2
+    background_noise_multiplier: float = 2.0
+    signal_to_noise_threshold: float = 3.0
+    magnitude_multiplier: float = 2.5
+    variation_multiplier: float = 1.2
+    rms_multiplier: float = 1.5
+    
+    # Frequency range for speech
+    min_speech_freq: int = 85
+    max_speech_freq: int = 3000
+    
+    # Variation threshold divisor
+    variation_divisor: float = 2.0
 
 
 @dataclass
 class AudioConfig:
     sample_rate: int = 16000
     channels: int = 1
-    chunk_size: int = 1024
+    chunk_size: int = 256
     format: int = pyaudio.paInt16
-    input_device_index: int = 1
-    use_plughw: bool = True
+    input_device_index: int | None = None
+    output_device_index: int | None = None
+    device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
+    speech_config: SpeechDetectionConfig = field(default_factory=SpeechDetectionConfig)
 
     def __post_init__(self):
-        # Make these mutable so they can be updated based on device capabilities
-        self.sample_rate = self.sample_rate
-        self.channels = self.channels
+        if self.chunk_size == 256:
+            self.chunk_size = int(self.sample_rate * (self.device_config.buffer_size_ms / 1000))
 
 
 @dataclass
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
     activation_sound_path: str = "src/assets/bing.mp3"
-    output_device: str = "hw:1,0"  # Default only required for Linux
+    volume_level: float = 1.0  # 0.0 to 1.0
+    output_device_index: int | None = None
+    fallback_device_index: int | None = None
+
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-3.5-turbo"
-    max_completion_tokens: int = 150
+    model: str = "gpt-4-turbo"  # Using faster model
+    max_completion_tokens: int = 75  # Further reduced for even quicker responses
     temperature: float = 0.7
+    system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
 
 
 @dataclass
 class TTSConfig:
     model: str = "tts-1"
-    voice: str = "nova"
+    voice: str = "nova" # "alloy", "echo", "fable", "onyx", "nova", "shimmer"
 
 
 @dataclass
 class WordDetectionConfig:
     model: str = "whisper-1"
-    temperature: float = 0.2
+    temperature: float = 0.0
     language: str = "en"
-    min_audio_size: int = 4096  # Minimum size in bytes for audio processing
+    min_audio_size: int = 1024  # Reduced from 2048 for faster processing
 
 
 @dataclass
 class AppConfig:
-    timeout_seconds: float = 30.0
-    wake_words: list[str] | None = None
+    timeout_seconds: float = 10.0
+    words: list[str] | None = None
     temp_recording_path: str = "recording.wav"
     temp_response_path: str = "response.mp3"
 
     def __post_init__(self):
-        if self.wake_words is None:
-            self.wake_words = [
+        if self.words is None:
+            self.words = [
                 "hey chat", "hi chat", "hello chat",
                 "hey chatbot", "hi chatbot", "hello chatbot",
                 "chat", "chats", "hey chap", "hey chaps",
