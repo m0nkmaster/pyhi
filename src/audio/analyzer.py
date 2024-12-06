@@ -27,20 +27,23 @@ def analyze_frequency_components(audio_data: np.ndarray, sample_rate: int) -> tu
     
     return avg_magnitude, peak_freq, freq_variation
 
-def is_speech(audio_bytes: bytes, config: AudioConfig, threshold: int = 500) -> bool:
+def is_speech(audio_bytes: bytes, config: AudioConfig) -> bool:
     """
     Determine if the audio frame contains speech-like characteristics.
     
     Args:
         audio_bytes: Raw audio data in bytes
-        config: Audio configuration parameters
-        threshold: Amplitude threshold for speech detection
+        config: Audio configuration parameters containing speech detection settings
     
     Returns:
         bool: True if speech is detected, False otherwise
     """
     # Convert bytes to numpy array
     audio_data = np.frombuffer(audio_bytes, dtype=np.int16)
+    
+    # Get speech detection config for cleaner code
+    speech_config = config.speech_config
+    threshold = speech_config.base_threshold
     
     # Calculate audio characteristics
     rms = calculate_rms(audio_data)
@@ -49,12 +52,29 @@ def is_speech(audio_bytes: bytes, config: AudioConfig, threshold: int = 500) -> 
         config.sample_rate
     )
     
-    # Define speech characteristics
-    is_loud_enough = rms > threshold
-    has_speech_frequencies = 100 < peak_freq < 3000
-    has_sufficient_variation = freq_variation > threshold/4
+    # Define speech characteristics with configured thresholds
+    is_loud_enough = rms > threshold * speech_config.loudness_multiplier
+    has_speech_frequencies = (speech_config.min_speech_freq < peak_freq < 
+                            speech_config.max_speech_freq)
+    has_sufficient_variation = freq_variation > threshold/speech_config.variation_divisor
     
-    if is_loud_enough and has_speech_frequencies and has_sufficient_variation:
-        print(f"\rSpeech detected - RMS: {rms:.1f}, Peak Freq: {peak_freq:.1f}Hz, Variation: {freq_variation:.1f}", end="", flush=True)
+    # Magnitude check using configured values
+    background_noise_level = threshold * speech_config.background_noise_multiplier
+    signal_to_noise = avg_magnitude / background_noise_level if background_noise_level > 0 else 0
+    has_sufficient_magnitude = signal_to_noise > speech_config.signal_to_noise_threshold
     
-    return is_loud_enough and has_speech_frequencies and has_sufficient_variation
+    # Energy distribution check using configured values
+    has_valid_energy_distribution = (
+        avg_magnitude > threshold * speech_config.magnitude_multiplier and
+        freq_variation > threshold * speech_config.variation_multiplier and
+        rms > threshold * speech_config.rms_multiplier
+    )
+    
+    if config.device_config.debug_audio and (is_loud_enough and has_speech_frequencies and 
+            has_sufficient_variation and has_sufficient_magnitude and has_valid_energy_distribution):
+        print(f"\rSpeech detected - RMS: {rms:.1f}, Freq: {peak_freq:.1f}Hz, "
+              f"Var: {freq_variation:.1f}, Mag: {avg_magnitude:.1f}, S/N: {signal_to_noise:.1f}", 
+              end="", flush=True)
+    
+    return (is_loud_enough and has_speech_frequencies and has_sufficient_variation and 
+            has_sufficient_magnitude and has_valid_energy_distribution)
