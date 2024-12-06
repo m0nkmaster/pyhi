@@ -255,6 +255,18 @@ def main():
             words=app_config.words,
             timeout_seconds=app_config.timeout_seconds
         )
+        
+        # Set the assistant reference for the API
+        from src.api import AssistantState
+        AssistantState.set_assistant(assistant)
+        
+        # Start the API server in a separate thread
+        import threading
+        from src.api import start_api
+        api_thread = threading.Thread(target=start_api, daemon=True)
+        api_thread.start()
+        
+        # Run the assistant
         assistant.run()
         return 0
     except Exception as e:
