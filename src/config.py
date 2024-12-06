@@ -14,15 +14,15 @@ if not os.getenv("OPENAI_API_KEY"):
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.7
-    response_silence_threshold: float = 0.5    # Reduced for faster response detection
-    buffer_duration: float = 0
+    response_silence_threshold: float = 0.7
+    buffer_duration: float = 0.5  # Added 0.5 second buffer for minimum audio length
 
 
 @dataclass
 class AudioConfig:
     sample_rate: int = 16000
     channels: int = 1
-    chunk_size: int = 256  # Reduced from 512 for faster processing
+    chunk_size: int = 512  # Restored to original value for better detection accuracy
     format: int = pyaudio.paInt16
     input_device_index: int | None = None
     use_plughw: bool = False
@@ -55,9 +55,9 @@ class TTSConfig:
 @dataclass
 class WordDetectionConfig:
     model: str = "whisper-1"
-    temperature: float = 0.0
+    temperature: float = 0.2  # Increased slightly for better word variation handling
     language: str = "en"
-    min_audio_size: int = 1024  # Reduced from 2048 for faster processing
+    min_audio_size: int = 2048  # Restored to original value for better accuracy
 
 
 @dataclass

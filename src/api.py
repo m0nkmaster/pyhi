@@ -42,8 +42,16 @@ async def sleep_device():
         return {"status": "Error: Voice Assistant not initialized", "success": False}
     
     if assistant.is_awake:
+        # Set interrupt flag to stop current processing
+        assistant.should_interrupt = True
         assistant.is_awake = False
         assistant.last_interaction = None
+        assistant.conversation_manager.clear_history()
+        # Stop any ongoing audio playback
+        try:
+            assistant.audio_player.stop()
+        except:
+            pass
         return {"status": "Device going to sleep", "success": True}
     return {"status": "Device is already sleeping", "success": False}
 

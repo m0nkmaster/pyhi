@@ -21,7 +21,7 @@ class WhisperWordDetector(WordDetector):
         self.words = self._prepare_words(words)
         self.config = config or WordDetectionConfig()
         self.audio_config = audio_config or AudioConfig()
-        self.similarity_threshold = 0.85  # Adjust this value between 0 and 1
+        self.similarity_threshold = 0.75  # Lowered threshold for better matching
     
     def _prepare_words(self, words: List[str]) -> List[str]:
         """Prepare words with variations."""
@@ -30,6 +30,11 @@ class WhisperWordDetector(WordDetector):
             # Clean the original word
             cleaned = self._clean_text(word)
             cleaned_words.add(cleaned)
+            
+            # Split multi-word phrases and add each word
+            parts = cleaned.split()
+            if len(parts) > 1:
+                cleaned_words.update(parts)
             
             # Add variation without punctuation
             no_punct = re.sub(r'[,.]', '', cleaned)
@@ -71,16 +76,24 @@ class WhisperWordDetector(WordDetector):
             transcript = self._clean_text(transcript)
             print(f"Transcript: '{transcript}'")
             
-            # Check for word matches with fuzzy matching
+            # First try exact matches
+            transcript_words = set(transcript.split())
+            for word in self.words:
+                if word in transcript_words:
+                    print(f"Exact word match: '{word}'")
+                    return True
+            
+            # Then try substring matches
+            for word in self.words:
+                if word in transcript:
+                    print(f"Word contained in transcript: '{word}'")
+                    return True
+            
+            # Finally try fuzzy matching
             for word in self.words:
                 similarity = self._calculate_similarity(transcript, word)
                 if similarity >= self.similarity_threshold:
-                    print(f"Word match: '{word}' (similarity: {similarity:.2f})")
-                    return True
-                
-                # Check if word is contained within a longer phrase
-                if word in transcript:
-                    print(f"Word contained in transcript: '{word}'")
+                    print(f"Fuzzy word match: '{word}' (similarity: {similarity:.2f})")
                     return True
             
             return False

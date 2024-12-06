@@ -55,14 +55,40 @@ class SystemAudioPlayer(AudioPlayer):
         """Play an audio file using the system's audio player."""
         try:
             if self._platform == 'darwin':
-                subprocess.run(['afplay', '-v', '0.5', filename], check=True)
+                # Run afplay with check=True to ensure proper playback
+                subprocess.run(['afplay', '-v', '0.5', filename],
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
             
             elif self._platform == 'linux':
-                subprocess.run(['mpg123', '-q', '-a', self.config.output_device, filename], check=True)
+                subprocess.run(['mpg123', '-q', '-a', self.config.output_device, filename],
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
             
             elif self._platform == 'windows':
                 ps_command = f'(New-Object Media.SoundPlayer "{filename}").PlaySync()'
-                subprocess.run(['powershell', '-c', ps_command], check=True)
+                subprocess.run(['powershell', '-c', ps_command],
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
                 
         except subprocess.CalledProcessError as e:
             raise AudioPlayerError(f"Failed to play audio file: {e}")
+
+    def stop(self) -> None:
+        """Stop any currently playing audio."""
+        try:
+            if self._platform == 'darwin':
+                subprocess.run(['killall', 'afplay'], 
+                             stdout=subprocess.PIPE, 
+                             stderr=subprocess.PIPE)
+            elif self._platform == 'linux':
+                subprocess.run(['killall', 'mpg123'], 
+                             stdout=subprocess.PIPE, 
+                             stderr=subprocess.PIPE)
+            elif self._platform == 'windows':
+                subprocess.run(['taskkill', '/F', '/IM', 'wmplayer.exe'],
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError:
+            # Ignore errors if no process was found to kill
+            pass

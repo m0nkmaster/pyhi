@@ -34,7 +34,7 @@ def is_speech(audio_bytes: bytes, config: AudioConfig, threshold: int = 500) -> 
     Args:
         audio_bytes: Raw audio data in bytes
         config: Audio configuration parameters
-        threshold: Amplitude threshold for speech detection
+        threshold: Base amplitude threshold for speech detection
     
     Returns:
         bool: True if speech is detected, False otherwise
@@ -49,10 +49,13 @@ def is_speech(audio_bytes: bytes, config: AudioConfig, threshold: int = 500) -> 
         config.sample_rate
     )
     
-    # Define speech characteristics
-    is_loud_enough = rms > threshold
+    # Calculate adaptive threshold based on recent audio levels
+    adaptive_threshold = max(threshold, rms * 0.75)  # Use at least 75% of current RMS
+    
+    # Define speech characteristics with adaptive thresholds
+    is_loud_enough = rms > adaptive_threshold
     has_speech_frequencies = 100 < peak_freq < 3000
-    has_sufficient_variation = freq_variation > threshold/4
+    has_sufficient_variation = freq_variation > adaptive_threshold/4
     
     if is_loud_enough and has_speech_frequencies and has_sufficient_variation:
         print(f"\rSpeech detected - RMS: {rms:.1f}, Peak Freq: {peak_freq:.1f}Hz, Variation: {freq_variation:.1f}", end="", flush=True)
