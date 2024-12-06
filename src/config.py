@@ -61,6 +61,12 @@ class WordDetectionConfig:
 
 
 @dataclass
+class APIConfig:
+    port: int = 1010
+    host: str = "0.0.0.0"
+
+
+@dataclass
 class AppConfig:
     timeout_seconds: float = 10.0
     words: list[str] | None = None

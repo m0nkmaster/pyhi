@@ -4,3 +4,5 @@ pyaudio==0.2.14
 SpeechRecognition
 pvporcupine
 numpy
+fastapi>=0.104.0
+uvicorn>=0.24.0
