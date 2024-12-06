@@ -75,6 +75,7 @@ class VoiceAssistant:
         # Initialize state
         self.is_awake = False
         self.last_interaction: Optional[datetime] = None
+        self.should_interrupt = False
         
         # Load activation sound
         print("Loading activation sound...")
@@ -119,10 +120,16 @@ class VoiceAssistant:
                     print("\nStarting trigger word detection cycle...")
                     if self._listen_for_trigger_word():
                         self.is_awake = True
+                        self.should_interrupt = False
                         self.last_interaction = datetime.now()
                         continue
                     else:
                         continue
+                
+                # Check if we should interrupt
+                if self.should_interrupt:
+                    self.should_interrupt = False
+                    continue
                 
                 # Process conversation when awake
                 print("\nRecording user input...")
@@ -131,10 +138,18 @@ class VoiceAssistant:
                     print("No speech detected in recording")
                     continue
                 
+                if self.should_interrupt:
+                    self.should_interrupt = False
+                    continue
+                
                 print("Transcribing audio...")
                 transcript = self.openai_wrapper.transcribe_audio("recording.wav")
                 if not transcript:
                     print("Failed to transcribe audio")
+                    continue
+                
+                if self.should_interrupt:
+                    self.should_interrupt = False
                     continue
                 
                 print(f"\nYou said: {transcript}")
@@ -146,6 +161,10 @@ class VoiceAssistant:
                     self.conversation_manager.get_conversation_history()
                 )
                 
+                if self.should_interrupt:
+                    self.should_interrupt = False
+                    continue
+                
                 if response:
                     print(f"Assistant: {response}")
                     self.conversation_manager.add_assistant_message(response)
@@ -153,7 +172,7 @@ class VoiceAssistant:
                     # Convert response to speech and play it
                     print("Converting response to speech...")
                     audio_data = self.openai_wrapper.text_to_speech(response)
-                    if audio_data:
+                    if audio_data and not self.should_interrupt:
                         try:
                             print("Playing response...")
                             self.audio_player.play(audio_data)

@@ -24,6 +24,7 @@ class PyAudioRecorder:
         self.config = config
         self.analyzer = analyzer
         self.on_error = on_error or (lambda e: None)
+        self.recorder_config = recorder_config or AudioRecorderConfig()
         
         try:
             self.audio = pyaudio.PyAudio()
@@ -57,9 +58,6 @@ class PyAudioRecorder:
             self.config.channels = int(device_info['maxInputChannels'])
             self.config.sample_rate = int(device_info['defaultSampleRate'])
             
-            # Use provided config or defaults
-            recorder_config = recorder_config or AudioRecorderConfig()
-            
             # Speech detection state
             self.speech_detection_buffer = []
             self.silence_counter = 0
@@ -72,7 +70,7 @@ class PyAudioRecorder:
             
             # Calculate buffer size in chunks
             chunks_per_second = self.config.sample_rate / self.config.chunk_size
-            self.buffer_size = int(chunks_per_second * recorder_config.buffer_duration)
+            self.buffer_size = int(chunks_per_second * self.recorder_config.buffer_duration)
             
         except Exception as e:
             self.on_error(e)
@@ -120,9 +118,10 @@ class PyAudioRecorder:
             session_silence_counter = 0
             speech_detection_buffer = []
             is_recording = False
+            min_frames = int(self.config.sample_rate * self.recorder_config.buffer_duration / self.config.chunk_size)
             
-            silence_threshold = (self.wake_word_silence_threshold if is_wake_word_mode 
-                               else self.response_silence_threshold)
+            silence_threshold = (self.recorder_config.wake_word_silence_threshold if is_wake_word_mode 
+                           else self.recorder_config.response_silence_threshold)
             
             print("\nRecording..." if not is_wake_word_mode else "Listening for trigger word...")
             
@@ -166,7 +165,7 @@ class PyAudioRecorder:
                 if len(speech_detection_buffer) >= 2 and not any(speech_detection_buffer[-2:]):
                     silence_counter += self.config.chunk_size / self.config.sample_rate
                     if silence_counter >= silence_threshold:
-                        if not is_wake_word_mode or is_recording:
+                        if not is_wake_word_mode or (is_recording and len(frames) >= min_frames):
                             break
                 else:
                     silence_counter = 0
@@ -177,6 +176,12 @@ class PyAudioRecorder:
             except Exception as e:
                 self.on_error(e)
             self.stream = None
+            
+            # Ensure minimum frame count for wake word detection
+            if is_wake_word_mode and len(frames) < min_frames:
+                print("Recording too short, extending with silence...")
+                silence_frame = b'\x00' * self.config.chunk_size
+                frames.extend([silence_frame] * (min_frames - len(frames)))
             
             return b''.join(frames)
             
