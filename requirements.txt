@@ -4,3 +4,4 @@ pyaudio==0.2.14
 SpeechRecognition
 pvporcupine
 numpy
+bleak>=0.21.1  # For Bluetooth LE support

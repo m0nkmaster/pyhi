@@ -21,8 +21,17 @@ from .config import (
     AudioPlayerConfig,
     WordDetectionConfig
 )
+from .triggers import (
+    TriggerManager,
+    WakeWordTrigger,
+    WakeWordTriggerConfig,
+    BluetoothTrigger,
+    BluetoothTriggerConfig
+)
 
 class VoiceAssistant:
+    """Voice assistant implementation."""
+    
     def __init__(self, words: list[str], timeout_seconds: float | None = None):
         """Initialize the voice assistant."""
         # Initialize configurations
@@ -52,12 +61,27 @@ class VoiceAssistant:
             system_prompt=self.chat_config.system_prompt
         )
         
-        self.word_detector = WhisperWordDetector(
-            client=openai_client,
-            words=words,
-            config=WordDetectionConfig(),
-            audio_config=self.audio_config
+        # Initialize trigger manager and triggers
+        self.trigger_manager = TriggerManager()
+        
+        # Add wake word trigger
+        wake_word_trigger = WakeWordTrigger(
+            openai_client=openai_client,
+            config=WakeWordTriggerConfig(
+                words=words,
+                audio_config=self.audio_config,
+                word_detection_config=WordDetectionConfig()
+            )
         )
+        self.trigger_manager.add_trigger(wake_word_trigger)
+        
+        # Add Bluetooth trigger if configured
+        bluetooth_config = BluetoothTriggerConfig(
+            device_name="PyHi Button",  # Replace with your button's name
+            characteristic_uuid="0000FFE1-0000-1000-8000-00805F9B34FB"  # Replace with your characteristic UUID
+        )
+        bluetooth_trigger = BluetoothTrigger(config=bluetooth_config)
+        self.trigger_manager.add_trigger(bluetooth_trigger)
         
         print("Setting up audio system...")
         self.audio_player = SystemAudioPlayer(
@@ -85,6 +109,9 @@ class VoiceAssistant:
         except FileNotFoundError:
             print(f"Warning: {self.audio_player_config.activation_sound_path} not found. No activation sound will be played.")
             self.activation_sound = None
+        
+        # Set up wake callback
+        self.trigger_manager.set_wake_callback(self._on_wake_trigger)
     
     def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
         """Implement AudioAnalyzer protocol."""
@@ -97,103 +124,82 @@ class VoiceAssistant:
             print(f"\rSpeech detection error: {e}", end="", flush=True)
             return False
     
+    def _on_wake_trigger(self) -> None:
+        """Handle wake trigger activation."""
+        try:
+            print("\nTrigger activated! Playing activation sound...")
+            if self.activation_sound:
+                self.audio_player.play(self.activation_sound)
+        except AudioPlayerError:
+            print("Failed to play activation sound")
+        
+        print("\nHow can I help you?")
+        self.is_awake = True
+        self.last_interaction = datetime.now()
+    
     def run(self):
         """Run the voice assistant main loop."""
-        print(f"Voice Assistant is ready! Say one of the trigger words to begin...")
-        print(f"Detection words: {', '.join(self.word_detector.words)}")
+        print(f"Voice Assistant is ready! Use wake word or Bluetooth button to begin...")
         print("Press Ctrl+C to quit")
         
         try:
+            # Start all triggers
+            self.trigger_manager.start_all()
+            
             while True:
                 # Check for timeout when awake
                 if self.is_awake:
                     if self._check_timeout():
-                        print("\nGoing back to sleep. Say a trigger word to start a new conversation.")
+                        print("\nGoing back to sleep. Use wake word or button to start a new conversation.")
                         self.is_awake = False
                         self.last_interaction = None
                         continue
-                    time.sleep(0.1)  # Small delay to prevent CPU spinning
-                
-                if not self.is_awake:
-                    # Listen for trigger word
-                    print("\nStarting trigger word detection cycle...")
-                    if self._listen_for_trigger_word():
-                        self.is_awake = True
+                    
+                    # Process conversation when awake
+                    print("\nRecording user input...")
+                    audio_data = self._record_user_input()
+                    if not audio_data:  # No speech detected
+                        print("No speech detected in recording")
+                        continue
+                    
+                    print("Transcribing audio...")
+                    transcript = self.openai_wrapper.transcribe_audio("recording.wav")
+                    if not transcript:
+                        print("Failed to transcribe audio")
+                        continue
+                    
+                    print(f"\nYou said: {transcript}")
+                    
+                    # Get assistant response
+                    print("Getting assistant response...")
+                    self.conversation_manager.add_user_message(transcript)
+                    response = self.openai_wrapper.get_chat_completion(
+                        self.conversation_manager.get_conversation_history()
+                    )
+                    
+                    if response:
+                        print(f"Assistant: {response}")
+                        self.conversation_manager.add_assistant_message(response)
+                        
+                        # Convert response to speech and play it
+                        print("Converting response to speech...")
+                        audio_data = self.openai_wrapper.text_to_speech(response)
+                        if audio_data:
+                            try:
+                                print("Playing response...")
+                                self.audio_player.play(audio_data)
+                                print("Response playback complete")
+                            except AudioPlayerError as e:
+                                print(f"Error playing response: {e}")
+                        
                         self.last_interaction = datetime.now()
-                        continue
-                    else:
-                        continue
                 
-                # Process conversation when awake
-                print("\nRecording user input...")
-                audio_data = self._record_user_input()
-                if not audio_data:  # No speech detected
-                    print("No speech detected in recording")
-                    continue
-                
-                print("Transcribing audio...")
-                transcript = self.openai_wrapper.transcribe_audio("recording.wav")
-                if not transcript:
-                    print("Failed to transcribe audio")
-                    continue
-                
-                print(f"\nYou said: {transcript}")
-                
-                # Get assistant response
-                print("Getting assistant response...")
-                self.conversation_manager.add_user_message(transcript)
-                response = self.openai_wrapper.get_chat_completion(
-                    self.conversation_manager.get_conversation_history()
-                )
-                
-                if response:
-                    print(f"Assistant: {response}")
-                    self.conversation_manager.add_assistant_message(response)
-                    
-                    # Convert response to speech and play it
-                    print("Converting response to speech...")
-                    audio_data = self.openai_wrapper.text_to_speech(response)
-                    if audio_data:
-                        try:
-                            print("Playing response...")
-                            self.audio_player.play(audio_data)
-                            print("Response playback complete")
-                        except AudioPlayerError as e:
-                            print(f"Error playing response: {e}")
-                    
-                    self.last_interaction = datetime.now()
+                time.sleep(0.1)  # Small delay to prevent CPU spinning
         
         except KeyboardInterrupt:
             print("\nShutting down...")
         finally:
             self._cleanup()
-    
-    def _listen_for_trigger_word(self) -> bool:
-        """Listen for trigger word activation."""
-        print("\rListening for trigger word...", end="", flush=True)
-        
-        self.audio_recorder.start_recording()
-        audio_data = self.audio_recorder.stop_recording(is_wake_word_mode=True)
-        
-        if not audio_data:
-            print("No audio data recorded")
-            return False
-        
-        # Save audio for trigger word detection
-        with open("recording.wav", "wb") as f:
-            f.write(audio_data)
-        
-        # Check for trigger word
-        if self.word_detector.detect(audio_data):
-            try:
-                print("Trigger word detected! Playing activation sound...")
-                self.audio_player.play(self.activation_sound)
-            except AudioPlayerError:
-                print("Failed to play activation sound")
-            print("\nTrigger word detected! How can I help you?")
-            return True
-        
-        return False
     
     def _record_user_input(self) -> Optional[bytes]:
         """Record user input with silence detection."""
@@ -230,7 +236,8 @@ class VoiceAssistant:
         return True
     
     def _cleanup(self):
-        """Clean up temporary files."""
+        """Clean up resources."""
+        self.trigger_manager.stop_all()
         print("\nCleaning up temporary files...")
         for file in ["recording.wav", "response.mp3"]:
             if os.path.exists(file):
