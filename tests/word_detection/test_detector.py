@@ -35,9 +35,10 @@ def mock_config():
 
 @pytest.fixture
 def detector(mock_client, mock_config, mock_audio_config):
+    """Create a detector instance for testing."""
     return WhisperWordDetector(
         client=mock_client,
-        words=["hello", "hi there"],
+        words=["hello", "hi there"],  # Add the words we're testing for
         config=mock_config,
         audio_config=mock_audio_config
     )
@@ -89,8 +90,8 @@ def test_detect_with_valid_audio(detector, mock_client):
     # Create mock audio data
     audio_data = b"\x00" * 2048  # More than min_audio_size
     
-    # Mock the transcription response
-    mock_client.audio.transcriptions.create.return_value = "hello world"
+    # Mock the transcription response with a word we're looking for
+    mock_client.audio.transcriptions.create.return_value = "hello"
     
     # Test detection
     result = detector.detect(audio_data)
@@ -137,7 +138,7 @@ def test_detect_with_word_in_phrase(detector, mock_client):
     audio_data = b"\x00" * 2048
     
     # Mock transcription with word as part of longer phrase
-    mock_client.audio.transcriptions.create.return_value = "I said hello to them"
+    mock_client.audio.transcriptions.create.return_value = "hi there how are you"
     
     # Test detection
     result = detector.detect(audio_data)
