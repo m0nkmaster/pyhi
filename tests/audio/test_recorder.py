@@ -2,7 +2,13 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock, call
 import pyaudio
 from itertools import cycle, chain, repeat
-from src.audio.recorder import PyAudioRecorder
+from src.audio.recorder import (
+    PyAudioRecorder,
+    AudioRecorderError,
+    DeviceNotFoundError,
+    AudioConfig,
+    AudioRecorderConfig
+)
 from src.config import AudioConfig, AudioRecorderConfig
 
 @pytest.fixture
@@ -52,13 +58,15 @@ def mock_stream():
 def mock_pyaudio(mock_stream):
     with patch('pyaudio.PyAudio') as mock:
         # Mock device info
-        device_info = {
+        device_info = MagicMock()
+        device_info.__getitem__.side_effect = {
             'index': 0,
             'name': 'Test Device',
             'maxInputChannels': 2,
             'defaultSampleRate': 44100,
             'is_builtin': False
-        }
+        }.__getitem__
+        
         mock.return_value.get_device_info_by_index.return_value = device_info
         mock.return_value.get_device_count.return_value = 1
         
@@ -69,6 +77,17 @@ def mock_pyaudio(mock_stream):
         yield mock
 
 def test_init_with_valid_device(mock_pyaudio, mock_analyzer, mock_audio_config, mock_recorder_config):
+    # Mock device info to have 2 channels
+    device_info = MagicMock()
+    device_info.__getitem__.side_effect = {
+        'index': 0,
+        'name': 'Test Device',
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'is_builtin': False
+    }.__getitem__
+    mock_pyaudio.return_value.get_device_info_by_index.return_value = device_info
+    
     recorder = PyAudioRecorder(
         config=mock_audio_config,
         analyzer=mock_analyzer,
@@ -82,32 +101,39 @@ def test_init_with_valid_device(mock_pyaudio, mock_analyzer, mock_audio_config, 
 
 def test_init_with_no_input_channels(mock_pyaudio, mock_analyzer, mock_audio_config):
     # Mock device with no input channels
-    mock_pyaudio.return_value.get_device_info_by_index.return_value = {
+    device_info = MagicMock()
+    device_info.__getitem__.side_effect = {
         'index': 0,
         'name': 'Invalid Device',
         'maxInputChannels': 0,
         'defaultSampleRate': 44100,
         'is_builtin': False
-    }
+    }.__getitem__
+    mock_pyaudio.return_value.get_device_info_by_index.return_value = device_info
     
     with pytest.raises(ValueError, match="has no input channels"):
         PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer)
+
+def test_init_error_callback(mock_pyaudio, mock_analyzer, mock_audio_config):
+    # Test error callback
+    error_callback = Mock()
+    mock_error = Exception("Device error")
+    
+    # Mock get_device_info_by_index to raise an error
+    mock_pyaudio.return_value.get_device_info_by_index.side_effect = mock_error
+    
+    # Should raise the original error
+    with pytest.raises(Exception) as exc_info:
+        PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer, on_error=error_callback)
+    
+    assert exc_info.value == mock_error
+    error_callback.assert_called_once_with(mock_error)
 
 def test_init_with_no_device_index(mock_pyaudio, mock_analyzer, mock_audio_config):
     # Test device index fallback
     mock_audio_config.input_device_index = None
     recorder = PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer)
     assert recorder.config.input_device_index == 0
-
-def test_init_error_callback(mock_pyaudio, mock_analyzer, mock_audio_config):
-    # Test error callback
-    error_callback = Mock()
-    mock_pyaudio.return_value.get_device_info_by_index.side_effect = Exception("Device error")
-    
-    with pytest.raises(Exception, match="Device error"):
-        PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer, on_error=error_callback)
-    
-    error_callback.assert_called_once()
 
 def test_cleanup_error_handling(mock_pyaudio, mock_analyzer, mock_audio_config, mock_stream):
     # Test cleanup with errors
@@ -123,18 +149,29 @@ def test_cleanup_error_handling(mock_pyaudio, mock_analyzer, mock_audio_config, 
     recorder.__del__()
 
 def test_start_recording(mock_pyaudio, mock_analyzer, mock_audio_config):
+    # Mock device info
+    device_info = MagicMock()
+    device_info.__getitem__.side_effect = {
+        'index': 0,
+        'name': 'Test Device',
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'is_builtin': False
+    }.__getitem__
+    mock_pyaudio.return_value.get_device_info_by_index.return_value = device_info
+    
     recorder = PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer)
     recorder.start_recording()
     
-    # Verify stream was opened with correct parameters
     mock_pyaudio.return_value.open.assert_called_once_with(
         format=mock_audio_config.format,
-        channels=2,  # Updated by init based on device info
-        rate=44100,  # Updated by init based on device info
+        channels=2,  # Should use device's channels
+        rate=44100,
         input=True,
         input_device_index=mock_audio_config.input_device_index,
         frames_per_buffer=mock_audio_config.chunk_size
     )
+    assert recorder.is_recording is True
 
 def test_start_recording_error(mock_pyaudio, mock_analyzer, mock_audio_config):
     # Mock stream opening to raise an error
@@ -271,21 +308,25 @@ def test_cleanup_on_deletion(mock_pyaudio, mock_analyzer, mock_audio_config, moc
     mock_pyaudio.return_value.terminate.assert_called_once()
 
 def test_init_with_no_input_devices(mock_pyaudio, mock_analyzer, mock_audio_config):
-    # Mock no available input devices
-    mock_pyaudio.return_value.get_device_count.return_value = 1
-    mock_pyaudio.return_value.get_device_info_by_index.return_value = {
+    # Mock device with no input channels for all devices
+    device_info = MagicMock()
+    device_info.__getitem__.side_effect = {
         'index': 0,
         'name': 'Output Only Device',
         'maxInputChannels': 0,
         'defaultSampleRate': 44100,
         'is_builtin': False
-    }
+    }.__getitem__
     
-    # Set input_device_index to None to test fallback
+    # Mock get_device_count to return 1 device
+    mock_pyaudio.return_value.get_device_count.return_value = 1
+    mock_pyaudio.return_value.get_device_info_by_index.return_value = device_info
+    
+    # Set input_device_index to None to force device search
     mock_audio_config.input_device_index = None
     
-    # Should raise an error since no input devices are available
-    with pytest.raises(ValueError, match="No input devices found"):
+    # Should raise DeviceNotFoundError since there are no input devices
+    with pytest.raises(DeviceNotFoundError, match="No input devices found"):
         PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer)
 
 @patch('time.sleep', return_value=None)  # Prevent actual sleeping

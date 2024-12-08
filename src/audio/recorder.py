@@ -8,8 +8,8 @@ class AudioRecorderError(Exception):
     """Custom exception for audio recorder errors."""
     pass
 
-class DeviceNotFoundError(AudioRecorderError):
-    """Raised when an audio device cannot be found."""
+class DeviceNotFoundError(Exception):
+    """Exception raised when no suitable audio input device is found."""
     pass
 
 class PyAudioRecorder:
@@ -53,41 +53,30 @@ class PyAudioRecorder:
             self.buffer_size = int(chunks_per_second * self.recorder_config.buffer_duration)
             
         except Exception as e:
-            self.on_error(e)
+            # Don't call on_error here since _setup_audio_device will handle it
             raise
 
     def _list_audio_devices(self) -> list[dict]:
         """List all available Audio Input Devices."""
         input_devices = []
-        if self.config.device_config.debug_audio or self.config.device_config.list_devices_on_start:
-            print("\n🎙️ Available Audio Input Devices:")
         
         for i in range(self.audio.get_device_count()):
-            dev_info = self.audio.get_device_info_by_index(i)
-            if dev_info['maxInputChannels'] > 0:  # Only show input devices
-                # Skip excluded devices
-                device_name = dev_info['name']
-                if any(excluded in device_name 
-                      for excluded in self.config.device_config.excluded_device_names):
-                    if self.config.device_config.debug_audio:
-                        print(f"Skipping excluded device: {device_name}")
-                    continue
+            try:
+                dev_info = self.audio.get_device_info_by_index(i)
+                if dev_info['maxInputChannels'] > 0:  # Only show input devices
+                    device = {
+                        'index': i,
+                        'name': dev_info['name'],
+                        'channels': dev_info['maxInputChannels'],
+                        'sample_rate': dev_info['defaultSampleRate'],
+                        'is_builtin': 'built-in' in str(dev_info['name']).lower() or 'internal' in str(dev_info['name']).lower()
+                    }
+                    input_devices.append(device)
+            except Exception as e:
+                if hasattr(self.config, 'device_config') and getattr(self.config.device_config, 'debug_audio', False):
+                    print(f"Error getting device info for index {i}: {e}")
+                continue
                 
-                device = {
-                    'index': i,
-                    'name': device_name,
-                    'channels': dev_info['maxInputChannels'],
-                    'sample_rate': dev_info['defaultSampleRate'],
-                    'is_builtin': 'built-in' in device_name.lower() or 'internal' in device_name.lower()
-                }
-                input_devices.append(device)
-                
-                if self.config.device_config.debug_audio or self.config.device_config.list_devices_on_start:
-                    print(f"Device {i}: {device_name}")
-                    print(f"    Input channels: {dev_info['maxInputChannels']}")
-                    print(f"    Sample rate: {dev_info['defaultSampleRate']}")
-                    if device['is_builtin']:
-                        print("    (Built-in device)")
         return input_devices
 
     def _find_compatible_device(self, devices: list[dict]) -> Optional[dict]:
@@ -95,118 +84,72 @@ class PyAudioRecorder:
         if not devices:
             return None
             
-        # 1. Check if preferred device name is specified and exists
-        if self.config.device_config.preferred_input_device_name:
+        # If no device config, return first device
+        if not hasattr(self.config, 'device_config'):
+            return devices[0]
+            
+        # Check if preferred device name is specified and exists
+        if hasattr(self.config.device_config, 'preferred_input_device_name') and self.config.device_config.preferred_input_device_name:
             for device in devices:
                 if self.config.device_config.preferred_input_device_name.lower() in device['name'].lower():
-                    if self.config.device_config.debug_audio:
-                        print(f"\nSelected preferred device: {device['name']}")
                     return device
         
-        # 2. If prefer_builtin_device is True and no preferred device, try built-in first
-        if self.config.device_config.prefer_builtin_device:
-            builtin_devices = [d for d in devices if d['is_builtin']]
-            if builtin_devices:
-                if self.config.device_config.debug_audio:
-                    print(f"\nSelected built-in device: {builtin_devices[0]['name']}")
-                return builtin_devices[0]
-        
-        # 3. Find best matching device based on preferred sample rates and channels
-        best_device = None
-        best_score = -1
-        
-        for device in devices:
-            score = 0
-            # Prefer sample rates closer to preferred rates
-            min_rate_diff = min(abs(device['sample_rate'] - rate) 
-                              for rate in self.config.device_config.preferred_sample_rates)
-            score += 1000 / (min_rate_diff + 1)  # Higher score for closer sample rates
-            
-            # Prefer devices with preferred channel counts
-            if device['channels'] in self.config.device_config.preferred_channels:
-                score += 500
-            
-            if score > best_score:
-                best_score = score
-                best_device = device
-        
-        if best_device and self.config.device_config.debug_audio:
-            print(f"\nSelected best matching device: {best_device['name']}")
-        
-        return best_device or devices[0]  # Fallback to first device if no good match
+        return devices[0]  # Fallback to first device
 
     def _setup_audio_device(self) -> None:
         """Set up the audio input device based on configuration."""
-        # List available devices
-        devices = self._list_audio_devices()
-        if not devices:
-            raise DeviceNotFoundError("No input devices found. Please connect a microphone or audio input device.")
-
-        # If device index is specified, verify it
-        if self.config.input_device_index is not None:
-            try:
+        try:
+            # If device index is specified, verify it first
+            if self.config.input_device_index is not None:
                 device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
                 if device_info['maxInputChannels'] == 0:
-                    if not self.config.device_config.fallback_to_default:
-                        raise DeviceNotFoundError(f"Selected device {self.config.input_device_index} has no input channels")
-                    self.config.input_device_index = None
-            except Exception as e:
-                if not self.config.device_config.fallback_to_default:
-                    raise DeviceNotFoundError(f"Invalid input device index: {e}")
-                self.config.input_device_index = None
+                    raise ValueError(f"Selected device {self.config.input_device_index} has no input channels")
 
-        # Find compatible device if no valid index specified
-        if self.config.input_device_index is None:
-            device = self._find_compatible_device(devices)
-            if not device:
-                raise DeviceNotFoundError("No compatible audio input device found")
-            
-            self.config.input_device_index = device['index']
-            if self.config.device_config.debug_audio:
-                print(f"\nSelected audio device: {device['name']}")
-                print(f"Index: {device['index']}")
-                print(f"Channels: {device['channels']}")
-                print(f"Sample rate: {device['sample_rate']}")
+            # List available devices if we need to find one
+            if self.config.input_device_index is None:
+                devices = self._list_audio_devices()
+                if not devices:
+                    raise DeviceNotFoundError("No input devices found. Please connect a microphone or audio input device.")
+                
+                device = self._find_compatible_device(devices)
+                if not device:
+                    raise DeviceNotFoundError("No compatible audio input device found")
+                
+                self.config.input_device_index = device['index']
 
-        # Configure device parameters
-        device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
-        if device_info['maxInputChannels'] == 0:
-            raise DeviceNotFoundError(f"Selected device {self.config.input_device_index} has no input channels")
+            # Get final device info and configure
+            device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
+            if device_info['maxInputChannels'] == 0:
+                raise ValueError(f"Selected device {self.config.input_device_index} has no input channels")
+                
+            # Update configuration with device capabilities
+            self.config.channels = int(device_info['maxInputChannels'])
+            self.config.sample_rate = int(device_info['defaultSampleRate'])
             
-        # Set channels to either the device's max input channels or the configured channels, whichever is smaller
-        self.config.channels = min(int(device_info['maxInputChannels']), self.config.channels)
-        self.config.sample_rate = int(device_info['defaultSampleRate'])
-    
+        except Exception as e:
+            self.on_error(e)
+            raise
+
     def start_recording(self) -> None:
         """Start recording audio."""
         if self.stream is not None:
             return
         
-        retries = 0
-        while retries < (self.config.device_config.max_retries if self.config.device_config.retry_on_error else 1):
-            try:
-                self.stream = self.audio.open(
-                    format=self.config.format,
-                    channels=self.config.channels,
-                    rate=self.config.sample_rate,
-                    input=True,
-                    input_device_index=self.config.input_device_index,
-                    frames_per_buffer=self.config.chunk_size
-                )
-                self.frames = []
-                self.speech_detection_buffer = []
-                self.silence_counter = 0
-                self.session_silence_counter = 0
-                self.is_recording = False
-                break
-            except Exception as e:
-                retries += 1
-                if retries >= self.config.device_config.max_retries or not self.config.device_config.retry_on_error:
-                    self.on_error(e)
-                    raise AudioRecorderError(f"Failed to start recording after {retries} attempts: {e}")
-                if self.config.device_config.debug_audio:
-                    print(f"Retry {retries}: Failed to start recording - {e}")
-                time.sleep(0.1)  # Short delay between retries
+        try:
+            self.stream = self.audio.open(
+                format=self.config.format,
+                channels=self.config.channels,
+                rate=self.config.sample_rate,
+                input=True,
+                input_device_index=self.config.input_device_index,
+                frames_per_buffer=self.config.chunk_size
+            )
+            self.is_recording = True
+            self.frames = []
+            self.audio_buffer = []
+        except Exception as e:
+            self.on_error(e)
+            raise AudioRecorderError(f"Failed to start recording: {str(e)}")
     
     def stop_recording(self, is_wake_word_mode: bool = False) -> bytes:
         """
