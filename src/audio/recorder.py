@@ -63,13 +63,21 @@ class PyAudioRecorder:
         for i in range(self.audio.get_device_count()):
             try:
                 dev_info = self.audio.get_device_info_by_index(i)
+                name = str(dev_info['name']).lower()
+                
+                # Skip virtual devices
+                if any(x in name for x in ['blackhole', 'virtual', 'loopback', 'microsoft teams']):
+                    if hasattr(self.config, 'device_config') and getattr(self.config.device_config, 'debug_audio', False):
+                        print(f"Skipping virtual device: {name}")
+                    continue
+                
                 if dev_info['maxInputChannels'] > 0:  # Only show input devices
                     device = {
                         'index': i,
                         'name': dev_info['name'],
                         'channels': dev_info['maxInputChannels'],
                         'sample_rate': dev_info['defaultSampleRate'],
-                        'is_builtin': 'built-in' in str(dev_info['name']).lower() or 'internal' in str(dev_info['name']).lower()
+                        'is_builtin': 'built-in' in name or 'internal' in name or 'macbook' in name
                     }
                     input_devices.append(device)
             except Exception as e:
@@ -84,8 +92,19 @@ class PyAudioRecorder:
         if not devices:
             return None
             
-        # If no device config, return first device
+        # If no device config, prefer built-in devices
         if not hasattr(self.config, 'device_config'):
+            # First try to find MacBook Pro Microphone
+            for device in devices:
+                if 'macbook pro microphone' in device['name'].lower():
+                    return device
+            
+            # Then try any built-in device
+            for device in devices:
+                if device['is_builtin']:
+                    return device
+            
+            # Fallback to first device
             return devices[0]
             
         # Check if preferred device name is specified and exists
@@ -94,7 +113,16 @@ class PyAudioRecorder:
                 if self.config.device_config.preferred_input_device_name.lower() in device['name'].lower():
                     return device
         
-        return devices[0]  # Fallback to first device
+        # If no preferred device found, use the same fallback logic
+        for device in devices:
+            if 'macbook pro microphone' in device['name'].lower():
+                return device
+        
+        for device in devices:
+            if device['is_builtin']:
+                return device
+        
+        return devices[0] if devices else None
 
     def _setup_audio_device(self) -> None:
         """Set up the audio input device based on configuration."""

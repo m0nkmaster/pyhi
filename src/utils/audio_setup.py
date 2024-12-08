@@ -26,7 +26,7 @@ def find_input_device() -> Optional[int]:
             
             # Look specifically for MacBook Pro Microphone
             if 'macbook pro microphone' in name:
-                print("    SELECTED: MacBook Pro Microphone found")
+                print("\n Selected Input Device: {}".format(name))
                 p.terminate()
                 return i
     
@@ -46,7 +46,7 @@ def find_input_device() -> Optional[int]:
                 
             # Look for built-in keywords
             if any(x in name for x in ['built-in', 'macbook', 'internal']):
-                print("    SELECTED: Built-in microphone found")
+                print("\n Selected Input Device: {}".format(name))
                 p.terminate()
                 return i
     
@@ -59,7 +59,7 @@ def find_input_device() -> Optional[int]:
             name = default_device.get('name', '').lower()
             print("Default device:", name)
             if not any(x in name for x in ['blackhole', 'virtual', 'loopback', 'microsoft teams']):
-                print("    SELECTED: Using default input device")
+                print("\n Selected Input Device: {}".format(name))
                 p.terminate()
                 return default_device.get('index')
             else:
