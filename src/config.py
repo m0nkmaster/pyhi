@@ -96,8 +96,8 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-4-turbo"  # Using faster model
-    max_completion_tokens: int = 250  # Further reduced for even quicker responses
+    model: str = "gpt-4-turbo"
+    max_completion_tokens: int = 250
     temperature: float = 0.7
     system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
 
