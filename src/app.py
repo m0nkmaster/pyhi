@@ -89,17 +89,40 @@ class VoiceAssistant:
         """Setup the audio system for playback and recording."""
         logging.info("Setting up audio system...")
         print_with_emoji("Setting up audio system...", "🔊")
+        
+        # Initialize audio player
         self.audio_player = SystemAudioPlayer(
             on_error=lambda e: logging.error(f"Audio playback error: {e}"),
             config=self.audio_player_config
         )
         
+        # Get and log output device info
+        if self.audio_player_config.output_device_index is not None:
+            try:
+                pa = pyaudio.PyAudio()
+                dev_info = pa.get_device_info_by_index(self.audio_player_config.output_device_index)
+                print_with_emoji(f"Using output device: {dev_info.get('name', 'Unknown')}", "🔈")
+                pa.terminate()
+            except Exception as e:
+                logging.warning(f"Could not get output device info: {e}")
+        
+        # Initialize audio recorder
         self.audio_recorder = PyAudioRecorder(
             config=self.audio_config,
             analyzer=self,
             on_error=lambda e: logging.error(f"Recording error: {e}"),
             recorder_config=AudioRecorderConfig()
         )
+        
+        # Get and log input device info
+        if self.audio_config.input_device_index is not None:
+            try:
+                pa = pyaudio.PyAudio()
+                dev_info = pa.get_device_info_by_index(self.audio_config.input_device_index)
+                print_with_emoji(f"Using input device: {dev_info.get('name', 'Unknown')}", "🎤")
+                pa.terminate()
+            except Exception as e:
+                logging.warning(f"Could not get input device info: {e}")
 
     def load_activation_sound(self):
         """Load the activation sound for the voice assistant."""
