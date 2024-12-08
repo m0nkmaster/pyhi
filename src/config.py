@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import pyaudio
 import os
 from dotenv import load_dotenv
@@ -13,36 +13,91 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.7
-    response_silence_threshold: float = 0.5    # Reduced for faster response detection
-    buffer_duration: float = 0
+    wake_word_silence_threshold: float = 1.2
+    response_silence_threshold: float = 1.0
+    buffer_duration: float = 1.5
+    min_phrase_duration: float = 1.0
+    max_phrase_duration: float = 15.0
+
+
+@dataclass
+class AudioDeviceConfig:
+    # Device selection
+    auto_select_device: bool = True
+    preferred_input_device_name: str | None = None  # Set to None by default
+    preferred_output_device_name: str | None = None  # Set to None by default
+    excluded_device_names: list[str] = field(default_factory=lambda: ["BlackHole", "ZoomAudioDevice"])
+    fallback_to_default: bool = True
+    
+    # Device selection priority
+    prefer_builtin_device: bool = True  # Will prefer built-in mic if no preferred device found
+    
+    # Audio quality
+    preferred_sample_rates: list[int] = field(default_factory=lambda: [48000, 44100, 16000])
+    preferred_channels: list[int] = field(default_factory=lambda: [1, 2])  # Mono preferred, but stereo ok
+    
+    # Buffer settings
+    buffer_size_ms: int = 50  # Used to calculate chunk_size based on sample rate
+    
+    # Error handling
+    retry_on_error: bool = True
+    max_retries: int = 3
+    
+    # Debug options
+    list_devices_on_start: bool = True
+    debug_audio: bool = False  # Set to False by default for production
+
+
+@dataclass
+class SpeechDetectionConfig:
+    # Base threshold for speech detection
+    base_threshold: int = 1000
+    
+    # Multipliers for different checks
+    loudness_multiplier: float = 1.2
+    background_noise_multiplier: float = 2.0
+    signal_to_noise_threshold: float = 3.0
+    magnitude_multiplier: float = 2.5
+    variation_multiplier: float = 1.2
+    rms_multiplier: float = 1.5
+    
+    # Frequency range for speech
+    min_speech_freq: int = 85
+    max_speech_freq: int = 3000
+    
+    # Variation threshold divisor
+    variation_divisor: float = 2.0
 
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 16000
+    sample_rate: int = 48000
     channels: int = 1
-    chunk_size: int = 256  # Reduced from 512 for faster processing
+    chunk_size: int = 512
     format: int = pyaudio.paInt16
     input_device_index: int | None = None
-    use_plughw: bool = False
+    output_device_index: int | None = None
+    device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
+    speech_config: SpeechDetectionConfig = field(default_factory=SpeechDetectionConfig)
 
     def __post_init__(self):
-        self.sample_rate = self.sample_rate
-        self.channels = self.channels
+        if self.chunk_size == 512:
+            self.chunk_size = int(self.sample_rate * (self.device_config.buffer_size_ms / 1000))
 
 
 @dataclass
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
     activation_sound_path: str = "src/assets/bing.mp3"
-    output_device: str = ""
+    volume_level: float = 1.0  # 0.0 to 1.0
+    output_device_index: int | None = None
+    fallback_device_index: int | None = None
 
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-4-turbo"  # Using faster model
-    max_completion_tokens: int = 75  # Further reduced for even quicker responses
+    model: str = "gpt-4-turbo"
+    max_completion_tokens: int = 250
     temperature: float = 0.7
     system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
 
@@ -52,12 +107,14 @@ class TTSConfig:
     model: str = "tts-1"
     voice: str = "nova" # "alloy", "echo", "fable", "onyx", "nova", "shimmer"
 
+
 @dataclass
 class WordDetectionConfig:
     model: str = "whisper-1"
     temperature: float = 0.0
     language: str = "en"
-    min_audio_size: int = 1024  # Reduced from 2048 for faster processing
+    min_audio_size: int = 4096
+    similarity_threshold: float = 0.75
 
 
 @dataclass
