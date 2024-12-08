@@ -59,40 +59,81 @@ class PyAudioRecorder:
     def _list_audio_devices(self) -> list[dict]:
         """List all available audio input devices."""
         input_devices = []
-        print("\nAvailable audio input devices:")
+        if self.config.device_config.debug_audio or self.config.device_config.list_devices_on_start:
+            print("\nAvailable audio input devices:")
+        
         for i in range(self.audio.get_device_count()):
             dev_info = self.audio.get_device_info_by_index(i)
             if dev_info['maxInputChannels'] > 0:  # Only show input devices
-                input_devices.append({
+                # Skip excluded devices
+                device_name = dev_info['name']
+                if any(excluded in device_name 
+                      for excluded in self.config.device_config.excluded_device_names):
+                    if self.config.device_config.debug_audio:
+                        print(f"Skipping excluded device: {device_name}")
+                    continue
+                
+                device = {
                     'index': i,
-                    'name': dev_info['name'],
+                    'name': device_name,
                     'channels': dev_info['maxInputChannels'],
-                    'sample_rate': dev_info['defaultSampleRate']
-                })
-                if self.config.device_config.debug_audio:
-                    print(f"Device {i}: {dev_info['name']}")
+                    'sample_rate': dev_info['defaultSampleRate'],
+                    'is_builtin': 'built-in' in device_name.lower() or 'internal' in device_name.lower()
+                }
+                input_devices.append(device)
+                
+                if self.config.device_config.debug_audio or self.config.device_config.list_devices_on_start:
+                    print(f"Device {i}: {device_name}")
                     print(f"    Input channels: {dev_info['maxInputChannels']}")
                     print(f"    Sample rate: {dev_info['defaultSampleRate']}")
+                    if device['is_builtin']:
+                        print("    (Built-in device)")
         return input_devices
 
     def _find_compatible_device(self, devices: list[dict]) -> Optional[dict]:
         """Find a compatible device based on configuration preferences."""
-        # Check if preferred device name is specified
+        if not devices:
+            return None
+            
+        # 1. Check if preferred device name is specified and exists
         if self.config.device_config.preferred_input_device_name:
             for device in devices:
                 if self.config.device_config.preferred_input_device_name.lower() in device['name'].lower():
+                    if self.config.device_config.debug_audio:
+                        print(f"\nSelected preferred device: {device['name']}")
                     return device
-
-        # Check for devices matching preferred sample rates and channels
-        for rate in self.config.device_config.preferred_sample_rates:
-            for channels in self.config.device_config.preferred_channels:
-                for device in devices:
-                    if (abs(device['sample_rate'] - rate) < 100 and  # Allow small sample rate difference
-                        device['channels'] >= channels):
-                        return device
-
-        # Return first available device if no match found
-        return devices[0] if devices else None
+        
+        # 2. If prefer_builtin_device is True and no preferred device, try built-in first
+        if self.config.device_config.prefer_builtin_device:
+            builtin_devices = [d for d in devices if d['is_builtin']]
+            if builtin_devices:
+                if self.config.device_config.debug_audio:
+                    print(f"\nSelected built-in device: {builtin_devices[0]['name']}")
+                return builtin_devices[0]
+        
+        # 3. Find best matching device based on preferred sample rates and channels
+        best_device = None
+        best_score = -1
+        
+        for device in devices:
+            score = 0
+            # Prefer sample rates closer to preferred rates
+            min_rate_diff = min(abs(device['sample_rate'] - rate) 
+                              for rate in self.config.device_config.preferred_sample_rates)
+            score += 1000 / (min_rate_diff + 1)  # Higher score for closer sample rates
+            
+            # Prefer devices with preferred channel counts
+            if device['channels'] in self.config.device_config.preferred_channels:
+                score += 500
+            
+            if score > best_score:
+                best_score = score
+                best_device = device
+        
+        if best_device and self.config.device_config.debug_audio:
+            print(f"\nSelected best matching device: {best_device['name']}")
+        
+        return best_device or devices[0]  # Fallback to first device if no good match
 
     def _setup_audio_device(self) -> None:
         """Set up the audio input device based on configuration."""
