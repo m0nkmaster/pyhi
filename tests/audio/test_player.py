@@ -21,16 +21,26 @@ def sample_audio():
 def mock_pyaudio(mocker):
     """Fixture for mocking PyAudio."""
     mock = mocker.patch('pyaudio.PyAudio').return_value
+    
     # Configure mock device
     mock_info = {
         'name': 'Test Device',
         'maxOutputChannels': 2,
-        'index': 0
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 0,
+        'defaultLowOutputLatency': 0.01
     }
+    
+    # Create a proper mock device that behaves like a dict
     mock_device = mocker.MagicMock(spec_set=dict)
     mock_device.__getitem__.side_effect = mock_info.__getitem__
+    mock_device.get = mock_info.get
+    
+    # Set up the mock PyAudio instance
     mock.get_device_info_by_index.return_value = mock_device
     mock.get_default_output_device_info.return_value = mock_device
+    mock.get_default_input_device_info.return_value = mock_device
     mock.get_device_count.return_value = 1
     
     return mock
@@ -48,11 +58,18 @@ def test_init_unsupported_platform():
         with pytest.raises(AudioPlayerError, match="Unsupported platform"):
             SystemAudioPlayer()
 
-@pytest.mark.parametrize("os_name", ['Darwin', 'Windows'])
-def test_init_supported_platforms(os_name):
+@pytest.mark.parametrize("os_name", ['Darwin', 'Windows', 'Linux'])
+def test_init_supported_platforms(os_name, mock_pyaudio):
+    """Test initialization on supported platforms."""
     with patch('platform.system', return_value=os_name):
-        player = SystemAudioPlayer()
-        assert player._platform == os_name.lower()
+        if os_name == 'Linux':
+            # Mock mpg123 check for Linux
+            with patch('subprocess.run', return_value=MagicMock()):
+                player = SystemAudioPlayer()
+                assert player._platform == os_name.lower()
+        else:
+            player = SystemAudioPlayer()
+            assert player._platform == os_name.lower()
 
 def test_init_linux_without_mpg123():
     with patch('platform.system', return_value='Linux'):
@@ -60,7 +77,8 @@ def test_init_linux_without_mpg123():
             with pytest.raises(AudioPlayerError, match="mpg123 not found"):
                 SystemAudioPlayer()
 
-def test_init_linux_with_mpg123():
+def test_init_linux_with_mpg123(mock_pyaudio):
+    """Test Linux initialization with mpg123 available."""
     with patch('platform.system', return_value='Linux'):
         with patch('subprocess.run', return_value=MagicMock()):
             player = SystemAudioPlayer()
@@ -157,10 +175,14 @@ def test_play_audio_with_device(mock_pyaudio, tmp_path, mock_device_config):
     device_info = {
         'name': 'Test Device',
         'maxOutputChannels': 2,
-        'index': 1
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 1,
+        'defaultLowOutputLatency': 0.01
     }
     mock_device = mock_pyaudio.MagicMock(spec_set=dict)
     mock_device.__getitem__.side_effect = device_info.__getitem__
+    mock_device.get = device_info.get
     mock_pyaudio.get_device_info_by_index.return_value = mock_device
     mock_pyaudio.get_default_output_device_info.return_value = mock_device
     mock_pyaudio.get_device_count.return_value = 2
@@ -201,19 +223,27 @@ def test_device_selection_preferred_device(mock_pyaudio, mocker):
     device_info_0 = {
         'name': 'Default Device',
         'maxOutputChannels': 2,
-        'index': 0
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 0,
+        'defaultLowOutputLatency': 0.01
     }
     
     device_info_1 = {
         'name': 'Preferred Device',
         'maxOutputChannels': 2,
-        'index': 1
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 1,
+        'defaultLowOutputLatency': 0.01
     }
     
     mock_device_0 = mocker.MagicMock(spec_set=dict)
     mock_device_0.__getitem__.side_effect = device_info_0.__getitem__
+    mock_device_0.get = device_info_0.get
     mock_device_1 = mocker.MagicMock(spec_set=dict)
     mock_device_1.__getitem__.side_effect = device_info_1.__getitem__
+    mock_device_1.get = device_info_1.get
     
     mock_pyaudio.get_device_count.return_value = 2
     mock_pyaudio.get_device_info_by_index.side_effect = lambda x: [mock_device_0, mock_device_1][x]
@@ -233,11 +263,15 @@ def test_device_selection_fallback(mock_pyaudio):
     device_info = {
         'name': 'Default Device',
         'maxOutputChannels': 2,
-        'index': 0
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 0,
+        'defaultLowOutputLatency': 0.01
     }
     
     mock_device = mock_pyaudio.MagicMock(spec_set=dict)
     mock_device.__getitem__.side_effect = device_info.__getitem__
+    mock_device.get = device_info.get
     mock_pyaudio.get_device_info_by_index.return_value = mock_device
     mock_pyaudio.get_default_output_device_info.return_value = mock_device
     mock_pyaudio.get_device_count.return_value = 1
@@ -257,11 +291,15 @@ def test_device_selection_no_fallback(mock_pyaudio):
     device_info = {
         'name': 'Default Device',
         'maxOutputChannels': 2,
-        'index': 0
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 0,
+        'defaultLowOutputLatency': 0.01
     }
     
     mock_device = mock_pyaudio.MagicMock(spec_set=dict)
     mock_device.__getitem__.side_effect = device_info.__getitem__
+    mock_device.get = device_info.get
     mock_pyaudio.get_device_info_by_index.return_value = mock_device
     mock_pyaudio.get_device_count.return_value = 1
     
