@@ -52,6 +52,11 @@ def mock_sleep():
         yield mock
 
 @pytest.fixture
+def mock_is_speech():
+    with patch('src.app.is_speech') as mock:
+        yield mock
+
+@pytest.fixture
 def assistant(
     mock_openai,
     mock_audio_player,
@@ -112,20 +117,25 @@ def test_init_with_custom_config(mock_openai):
             assert assistant.app_config.words == ['hey', 'hi']
             assert assistant.app_config.timeout_seconds == 10.0
 
-def test_is_speech(assistant):
+def test_is_speech(assistant, mock_is_speech):
     """Test speech detection."""
-    with patch('src.app.is_speech') as mock_is_speech:
-        mock_is_speech.return_value = True
-        assert assistant.is_speech(b'audio_data', AudioConfig())
-        mock_is_speech.assert_called_once_with(b'audio_data', AudioConfig())
+    mock_config = AudioConfig()
+    mock_audio = b'audio_data'
+    
+    # Test when speech is detected
+    mock_is_speech.return_value = True
+    assert assistant.is_speech(mock_audio, mock_config)
+    mock_is_speech.assert_called_once_with(mock_audio, mock_config)
 
-def test_is_speech_error(assistant):
+def test_is_speech_error(assistant, mock_is_speech):
     """Test speech detection error handling."""
-    with patch('src.app.is_speech') as mock_is_speech:
-        mock_is_speech.side_effect = Exception("Speech detection error")
-        result = assistant.is_speech(b'audio_data', AudioConfig())
-        assert not result  # Should return False on error
-        mock_is_speech.assert_called_once_with(b'audio_data', AudioConfig())
+    mock_config = AudioConfig()
+    mock_audio = b'audio_data'
+    
+    mock_is_speech.side_effect = Exception("Speech detection error")
+    result = assistant.is_speech(mock_audio, mock_config)
+    assert not result  # Should return False on error
+    mock_is_speech.assert_called_once_with(mock_audio, mock_config)
 
 def test_init_no_activation_sound(mock_openai):
     """Test initialization when activation sound file is not found."""
@@ -296,6 +306,71 @@ def test_run_audio_playback_error(mock_sleep, mock_cleanup_assistant):
     
     mock_cleanup_assistant.run()
     mock_cleanup_assistant._cleanup.assert_called_once()
+
+def test_run_no_speech_no_whisper(mock_sleep, mock_cleanup_assistant, mock_is_speech):
+    """Test that Whisper is not called when no speech is detected."""
+    # Setup
+    assistant = mock_cleanup_assistant
+    
+    # Configure mocks
+    def run_once(*args, **kwargs):
+        assistant.is_awake = True
+        raise KeyboardInterrupt()
+    
+    assistant._listen_for_trigger_word = Mock(side_effect=run_once)
+    assistant._record_user_input = Mock(return_value=None)  # No speech detected
+    
+    # Run the assistant
+    assistant.run()
+    
+    # Verify
+    assistant._listen_for_trigger_word.assert_called_once()
+    assistant.openai_wrapper.transcribe_audio.assert_not_called()  # Verify Whisper was not called
+    assistant.conversation_manager.add_user_message.assert_not_called()
+    assistant.openai_wrapper.get_chat_completion.assert_not_called()
+    assistant._cleanup.assert_called_once()
+
+def test_run_with_speech_calls_whisper(mock_sleep, mock_cleanup_assistant, mock_is_speech):
+    """Test that Whisper is called when speech is detected."""
+    # Setup
+    assistant = mock_cleanup_assistant
+    
+    # Track state for mocks
+    trigger_word_called = False
+    check_timeout_called = False
+    
+    # Configure mocks
+    def trigger_word_mock(*args, **kwargs):
+        nonlocal trigger_word_called
+        if not trigger_word_called:
+            trigger_word_called = True
+            return True
+        raise KeyboardInterrupt()
+    
+    def check_timeout_mock(*args, **kwargs):
+        nonlocal check_timeout_called
+        if not check_timeout_called:
+            check_timeout_called = True
+            return False
+        return True
+    
+    assistant._listen_for_trigger_word = Mock(side_effect=trigger_word_mock)
+    assistant._record_user_input = Mock(return_value=b"test_audio")  # Speech detected
+    assistant._check_timeout = Mock(side_effect=check_timeout_mock)  # Control flow
+    assistant.openai_wrapper.transcribe_audio.return_value = "Hello"
+    assistant.openai_wrapper.get_chat_completion.return_value = "Hi there!"
+    assistant.openai_wrapper.text_to_speech.return_value = b"audio_response"
+    assistant.audio_player.play = Mock()  # Mock audio playback
+    
+    # Run the assistant
+    assistant.run()
+    
+    # Verify
+    assistant._listen_for_trigger_word.assert_called()
+    assistant._record_user_input.assert_called_once()
+    assistant.openai_wrapper.transcribe_audio.assert_called_once()  # Verify Whisper was called
+    assistant.conversation_manager.add_user_message.assert_called_once_with("Hello")
+    assistant._cleanup.assert_called_once()
 
 def test_main_no_api_key():
     """Test main function without API key."""

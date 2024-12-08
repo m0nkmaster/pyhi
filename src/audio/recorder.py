@@ -218,15 +218,10 @@ class PyAudioRecorder:
                         print(f"IOError during recording: {e}")
                     continue
                 
-                # Always collect frames in non-wake-word mode
-                if not is_wake_word_mode:
-                    frames.append(data)
-                
-                # Maintain rolling buffer for word detection
-                if is_wake_word_mode:
-                    self.audio_buffer.append(data)
-                    if len(self.audio_buffer) > self.buffer_size:
-                        self.audio_buffer.pop(0)
+                # Maintain rolling buffer for all modes
+                self.audio_buffer.append(data)
+                if len(self.audio_buffer) > self.buffer_size:
+                    self.audio_buffer.pop(0)
                 
                 # Detect speech
                 is_speech = self.analyzer.is_speech(data, self.config)
@@ -238,13 +233,13 @@ class PyAudioRecorder:
                 if any(speech_detection_buffer):
                     if not is_recording:
                         is_recording = True
-                        if is_wake_word_mode:
-                            # Include buffer content when speech starts
-                            frames.extend(self.audio_buffer)
-                            frames.append(data)
-                    elif is_wake_word_mode:
-                        frames.append(data)
+                        # Include buffer content when speech starts in any mode
+                        frames.extend(self.audio_buffer[-4:])  # Include last ~100ms before speech
+                    frames.append(data)
                     silence_counter = 0
+                elif is_recording:
+                    # Continue collecting frames after speech until silence threshold
+                    frames.append(data)
                 
                 # Handle silence detection
                 if len(speech_detection_buffer) >= 2 and not any(speech_detection_buffer[-2:]):
