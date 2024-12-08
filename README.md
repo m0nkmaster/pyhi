@@ -125,13 +125,14 @@ The application is highly configurable through several configuration classes in 
 - Detection sensitivity
 - Processing parameters
 
+[Here](CONFIG.md) is a full configuration breakdown.
+
 ## Usage
 
 1. Start the assistant:
 ```bash
 python -m src.app
 ```
-[Here](CONFIG.md) is a full configuration breakdown.
 
 2. Activate with wake words:
    - Say any configured wake word (default: "Hey Chat", "Hi Chat")
