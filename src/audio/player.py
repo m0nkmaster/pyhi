@@ -1,7 +1,7 @@
 import os
 import platform
 import subprocess
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 import pyaudio
 from ..utils.types import AudioPlayer
 from ..config import AudioPlayerConfig, AudioDeviceConfig
@@ -85,37 +85,67 @@ class SystemAudioPlayer(AudioPlayer):
         else:
             raise DeviceNotFoundError("No suitable output device found")
 
-    def play(self, audio_data: bytes) -> None:
-        """Play audio data using the system's audio player."""
-        retries = 0
-        last_exception = None
+    def play(self, audio_data: bytes, volume: float | None = None, device: str | None = None) -> None:
+        """
+        Play audio data using the system's audio player.
         
-        while retries < (self.device_config.max_retries if self.device_config.retry_on_error else 1):
-            try:
-                # Save audio data to a temporary file
-                with open(self.config.temp_file, "wb") as f:
-                    f.write(audio_data)
-                
-                # Play using system audio player
-                self._play_audio_file(self.config.temp_file)
-                return  # Success, exit the function
-                
-            except Exception as e:
-                last_exception = e
-                retries += 1
-                if self.device_config.debug_audio:
-                    print(f"Retry {retries}: Failed to play audio - {e}")
-            
-            if os.path.exists(self.config.temp_file):
+        Args:
+            audio_data: Raw audio data in bytes
+            volume: Optional volume level (0.0 to 1.0)
+            device: Optional device name to play on
+        """
+        # Store original values
+        orig_volume = self.config.volume_level
+        orig_device = self.config.output_device_index
+        
+        try:
+            # Apply temporary volume if specified
+            if volume is not None:
+                self.config.volume_level = volume
+        
+            # Apply temporary device if specified
+            if device is not None:
+                # Find device by name
+                for i in range(self._pa.get_device_count()):
+                    dev_info = self._pa.get_device_info_by_index(i)
+                    if dev_info['name'] == device:
+                        self.config.output_device_index = i
+                        break
+        
+            retries = 0
+            last_exception = None
+            temp_file_created = False
+        
+            while retries < (self.device_config.max_retries if self.device_config.retry_on_error else 1):
                 try:
-                    os.remove(self.config.temp_file)
-                except:
-                    pass
+                    # Save audio data to a temporary file
+                    with open(self.config.temp_file, "wb") as f:
+                        f.write(audio_data)
+                        temp_file_created = True
+                
+                    # Play using system audio player
+                    self._play_audio_file(self.config.temp_file)
+                    return  # Success, exit the function
+                
+                except Exception as e:
+                    last_exception = e
+                    retries += 1
+                    if self.device_config.debug_audio:
+                        print(f"Retry {retries}: Failed to play audio - {e}")
         
-        # If we get here, all retries failed
-        self.on_error(last_exception)
-        raise AudioPlayerError(f"Failed to play audio after {retries} attempts: {last_exception}")
-     
+            # If we get here, all retries failed
+            self.on_error(last_exception)
+            raise AudioPlayerError(f"Failed to play audio after {retries} attempts: {last_exception}")
+    
+        finally:
+            # Restore original values
+            self.config.volume_level = orig_volume
+            self.config.output_device_index = orig_device
+            
+            # Clean up temp file if it was created
+            if temp_file_created and os.path.exists(self.config.temp_file):
+                os.remove(self.config.temp_file)
+
     def _play_audio_file(self, filename: str) -> None:
         """Play an audio file using the system's audio player."""
         try:

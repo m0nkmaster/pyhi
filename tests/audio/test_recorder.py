@@ -12,13 +12,24 @@ def mock_analyzer():
     return analyzer
 
 @pytest.fixture
-def mock_audio_config():
+def mock_device_config():
+    return Mock(
+        debug_audio=False,
+        list_devices_on_start=False,
+        excluded_device_names=[],
+        preferred_input_device_name=None,
+        fallback_to_default=True
+    )
+
+@pytest.fixture
+def mock_audio_config(mock_device_config):
     return AudioConfig(
         sample_rate=44100,
         channels=1,
         chunk_size=1024,
         format=pyaudio.paInt16,
-        input_device_index=0
+        input_device_index=0,
+        device_config=mock_device_config
     )
 
 @pytest.fixture
@@ -42,9 +53,11 @@ def mock_pyaudio(mock_stream):
     with patch('pyaudio.PyAudio') as mock:
         # Mock device info
         device_info = {
+            'index': 0,
+            'name': 'Test Device',
             'maxInputChannels': 2,
             'defaultSampleRate': 44100,
-            'name': 'Test Device'
+            'is_builtin': False
         }
         mock.return_value.get_device_info_by_index.return_value = device_info
         mock.return_value.get_device_count.return_value = 1
@@ -70,9 +83,11 @@ def test_init_with_valid_device(mock_pyaudio, mock_analyzer, mock_audio_config, 
 def test_init_with_no_input_channels(mock_pyaudio, mock_analyzer, mock_audio_config):
     # Mock device with no input channels
     mock_pyaudio.return_value.get_device_info_by_index.return_value = {
+        'index': 0,
+        'name': 'Invalid Device',
         'maxInputChannels': 0,
         'defaultSampleRate': 44100,
-        'name': 'Invalid Device'
+        'is_builtin': False
     }
     
     with pytest.raises(ValueError, match="has no input channels"):
@@ -259,9 +274,11 @@ def test_init_with_no_input_devices(mock_pyaudio, mock_analyzer, mock_audio_conf
     # Mock no available input devices
     mock_pyaudio.return_value.get_device_count.return_value = 1
     mock_pyaudio.return_value.get_device_info_by_index.return_value = {
+        'index': 0,
+        'name': 'Output Only Device',
         'maxInputChannels': 0,
         'defaultSampleRate': 44100,
-        'name': 'Output Only Device'
+        'is_builtin': False
     }
     
     # Set input_device_index to None to test fallback
