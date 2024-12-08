@@ -57,10 +57,10 @@ class PyAudioRecorder:
             raise
 
     def _list_audio_devices(self) -> list[dict]:
-        """List all available audio input devices."""
+        """List all available Audio Input Devices."""
         input_devices = []
         if self.config.device_config.debug_audio or self.config.device_config.list_devices_on_start:
-            print("\nAvailable audio input devices:")
+            print("\n🎙️ Available Audio Input Devices:")
         
         for i in range(self.audio.get_device_count()):
             dev_info = self.audio.get_device_info_by_index(i)

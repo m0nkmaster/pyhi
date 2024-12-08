@@ -51,7 +51,7 @@ class SystemAudioPlayer(AudioPlayer):
 
     def _list_audio_devices(self) -> None:
         """List all available audio devices."""
-        print("\nAvailable Audio Output Devices:")
+        print("\n🔊 Available Audio Output Devices")
         for i in range(self._pa.get_device_count()):
             dev_info = self._pa.get_device_info_by_index(i)
             if dev_info['maxOutputChannels'] > 0:
