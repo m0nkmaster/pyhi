@@ -147,7 +147,9 @@ class PyAudioRecorder:
             try:
                 device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
                 if device_info['maxInputChannels'] == 0:
-                    raise DeviceNotFoundError(f"Selected device {self.config.input_device_index} has no input channels")
+                    if not self.config.device_config.fallback_to_default:
+                        raise DeviceNotFoundError(f"Selected device {self.config.input_device_index} has no input channels")
+                    self.config.input_device_index = None
             except Exception as e:
                 if not self.config.device_config.fallback_to_default:
                     raise DeviceNotFoundError(f"Invalid input device index: {e}")
@@ -168,8 +170,11 @@ class PyAudioRecorder:
 
         # Configure device parameters
         device_info = self.audio.get_device_info_by_index(self.config.input_device_index)
-        self.config.channels = min(int(device_info['maxInputChannels']), 
-                                 max(self.config.device_config.preferred_channels))
+        if device_info['maxInputChannels'] == 0:
+            raise DeviceNotFoundError(f"Selected device {self.config.input_device_index} has no input channels")
+            
+        # Set channels to either the device's max input channels or the configured channels, whichever is smaller
+        self.config.channels = min(int(device_info['maxInputChannels']), self.config.channels)
         self.config.sample_rate = int(device_info['defaultSampleRate'])
     
     def start_recording(self) -> None:

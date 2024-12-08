@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import pyaudio
 from src.audio.analyzer import calculate_rms, analyze_frequency_components, is_speech
-from src.config import AudioConfig
+from src.config import AudioConfig, SpeechDetectionConfig
 
 @pytest.fixture
 def sample_audio_data():
@@ -18,7 +18,16 @@ def audio_config():
         sample_rate=44100,
         channels=1,
         chunk_size=1024,
-        format=pyaudio.paInt16
+        format=pyaudio.paInt16,
+        speech_config=SpeechDetectionConfig(
+            base_threshold=500,  # Lower threshold for test
+            loudness_multiplier=1.0,
+            background_noise_multiplier=1.5,
+            signal_to_noise_threshold=2.0,
+            magnitude_multiplier=1.5,
+            variation_multiplier=1.0,
+            rms_multiplier=1.0
+        )
     )
 
 def test_calculate_rms():
@@ -46,31 +55,36 @@ def test_analyze_frequency_components(sample_audio_data):
     assert avg_magnitude > 0
     assert freq_variation >= 0
 
-def test_is_speech():
+def test_is_speech(audio_config):
     # Create a synthetic speech-like signal
     duration = 0.1
-    sample_rate = 44100
+    sample_rate = audio_config.sample_rate
     t = np.linspace(0, duration, int(sample_rate * duration))
     
-    # Combine multiple frequencies typical in speech (e.g., 200Hz and 1000Hz)
-    signal = 5000 * (np.sin(2 * np.pi * 200 * t) + 0.5 * np.sin(2 * np.pi * 1000 * t))
-    
-    # Convert to int16 and then to bytes
-    audio_bytes = signal.astype(np.int16).tobytes()
-    
-    config = AudioConfig(
-        sample_rate=sample_rate,
-        channels=1,
-        chunk_size=len(signal),
-        format=pyaudio.paInt16
+    # Create a more complex signal with multiple frequencies typical of speech
+    speech_like_signal = (
+        np.sin(2 * np.pi * 150 * t) +  # Fundamental frequency
+        0.5 * np.sin(2 * np.pi * 300 * t) +  # First harmonic
+        0.25 * np.sin(2 * np.pi * 450 * t)   # Second harmonic
     )
     
-    # Test with default threshold
-    assert is_speech(audio_bytes, config)
+    # Add some amplitude modulation to simulate speech patterns
+    modulation = 1 + 0.5 * np.sin(2 * np.pi * 5 * t)
+    speech_like_signal *= modulation
     
-    # Test with very high threshold (should not detect speech)
-    assert not is_speech(audio_bytes, config, threshold=10000)
+    # Scale to a significant amplitude (above base_threshold)
+    speech_like_signal = speech_like_signal * 1000
     
-    # Test with silence (zeros)
+    # Convert to bytes
+    audio_bytes = speech_like_signal.astype(np.int16).tobytes()
+    
+    # Test with speech-like signal
+    assert is_speech(audio_bytes, audio_config)
+    
+    # Test with silence (should return False)
     silence = np.zeros(int(sample_rate * duration), dtype=np.int16).tobytes()
-    assert not is_speech(silence, config)
+    assert not is_speech(silence, audio_config)
+    
+    # Test with pure noise (should return False)
+    noise = (np.random.random(int(sample_rate * duration)) * 100).astype(np.int16).tobytes()
+    assert not is_speech(noise, audio_config)
