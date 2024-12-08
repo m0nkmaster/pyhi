@@ -13,8 +13,8 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 1.2
-    response_silence_threshold: float = 1.0
+    wake_word_silence_threshold: float = 0.5
+    response_silence_threshold: float = 2.0
     buffer_duration: float = 1.5
 
 
