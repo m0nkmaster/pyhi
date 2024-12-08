@@ -1,5 +1,9 @@
 # PyHi - Voice Assistant
 
+<p align="center">
+  <img src="pyhi.jpg" alt="PyHi Logo" width="200">
+</p>
+
 A Python-based voice assistant that enables natural conversations with ChatGPT using voice input and output. The assistant listens for wake words, processes voice commands, and responds with synthesized speech using OpenAI's APIs.
 
 ## Features
