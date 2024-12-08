@@ -57,7 +57,6 @@ class AudioConfig:
     chunk_size: int = 256            # Processing chunk size
     format: int = pyaudio.paInt16    # 16-bit audio
     input_device_index: int | None = 1  # Audio input device
-    use_plughw: bool = False         # Linux audio config, deprecated
 ```
 
 #### Important Notes
@@ -84,18 +83,23 @@ class AudioPlayerConfig:
 - `output_device`: Only used on Linux with mpg123. On macOS/Windows, system default is used
 
 ### ChatConfig
-ChatGPT API configuration.
+Configuration for the GPT-4-Turbo language model.
 
 ```python
 @dataclass
 class ChatConfig:
-    model: str = "gpt-4-turbo"        # GPT model selection
-    max_completion_tokens: int = 75              # Maximum response length in tokens
-    temperature: float = 0.7          # Response randomness
+    model: str = "gpt-4-turbo"        # Latest GPT-4 model for improved responses
+    max_completion_tokens: int = 75    # Maximum response length in tokens
+    temperature: float = 0.7          # Response creativity (0.0-1.0)
     system_prompt: str = "You are a helpful assistant. Respond briefly."
 ```
 
 #### Important Notes
+- `model`: Uses GPT-4-Turbo for optimal performance and cost efficiency
+- `max_completion_tokens`: Keeps responses concise and natural for voice output
+- `temperature`: 0.7 provides a good balance between consistency and creativity
+- `system_prompt`: Configures the AI's personality and response style
+
 [See OpenAI Chat API Documentation](https://platform.openai.com/docs/api-reference/chat/create)
 
 ### TTSConfig

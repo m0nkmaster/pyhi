@@ -16,8 +16,6 @@ class AudioRecorderConfig:
     wake_word_silence_threshold: float = 1.2
     response_silence_threshold: float = 1.0
     buffer_duration: float = 1.5
-    min_phrase_duration: float = 1.0
-    max_phrase_duration: float = 15.0
 
 
 @dataclass
@@ -28,14 +26,7 @@ class AudioDeviceConfig:
     preferred_output_device_name: str | None = None  # Set to None by default
     excluded_device_names: list[str] = field(default_factory=lambda: ["BlackHole", "ZoomAudioDevice"])
     fallback_to_default: bool = True
-    
-    # Device selection priority
-    prefer_builtin_device: bool = True  # Will prefer built-in mic if no preferred device found
-    
-    # Audio quality
-    preferred_sample_rates: list[int] = field(default_factory=lambda: [48000, 44100, 16000])
-    preferred_channels: list[int] = field(default_factory=lambda: [1, 2])  # Mono preferred, but stereo ok
-    
+        
     # Buffer settings
     buffer_size_ms: int = 50  # Used to calculate chunk_size based on sample rate
     
@@ -91,7 +82,6 @@ class AudioPlayerConfig:
     activation_sound_path: str = "src/assets/bing.mp3"
     volume_level: float = 1.0  # 0.0 to 1.0
     output_device_index: int | None = None
-    fallback_device_index: int | None = None
 
 
 @dataclass
