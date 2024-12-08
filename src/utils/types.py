@@ -10,14 +10,12 @@ class AudioConfig:
         chunk_size: int = 1024,
         format: int = pyaudio.paInt16,
         input_device_index: int | None = None,
-        use_plughw: bool = False
     ):
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk_size = chunk_size
         self.format = format
         self.input_device_index = input_device_index
-        self.use_plughw = use_plughw
 
 @dataclass
 class AudioFrame:

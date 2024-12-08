@@ -5,11 +5,13 @@ A Python-based voice assistant that enables natural conversations with ChatGPT u
 ## Features
 
 - Wake word detection using OpenAI's Whisper API
-- Natural voice conversations with ChatGPT
+- Natural voice conversations powered by GPT-4-Turbo
 - Text-to-speech responses using OpenAI's TTS API
 - Automatic session management with configurable timeouts
 - Cross-platform audio playback support
 - Configurable wake words and audio settings
+- Intelligent speech detection with silence analysis
+- System audio integration for reliable playback
 - Speech detection and analysis
 - System audio integration
 
@@ -65,25 +67,32 @@ PyAudio should install directly through pip. If issues occur, use the appropriat
 ```
 pyhi/
 ├── src/
-│   ├── app.py              # Main application entry point
-│   ├── config.py           # Configuration classes
-│   ├── _config-mac.py      # macOS-specific config
-│   ├── _config-raspberry-pi.py  # Raspberry Pi config
-│   ├── audio/              # Audio recording and playback
-│   │   ├── analyzer.py     # Speech analysis
-│   │   ├── player.py       # Audio playback
-│   │   └── recorder.py     # Audio recording
-│   ├── conversation/       # Chat functionality
-│   │   ├── manager.py      # Conversation management
+│   ├── app.py             # Main application entry point
+│   ├── config.py          # Configuration classes
+│   ├── _config-mac.py     # macOS-specific config sample
+│   ├── _config-raspberry-pi.py  # Raspberry Pi config sample
+│   ├── audio/             # Audio recording and playback
+│   │   ├── analyzer.py    # Speech analysis
+│   │   ├── player.py      # Audio playback
+│   │   └── recorder.py    # Audio recording
+│   ├── conversation/      # Chat functionality
+│   │   ├── manager.py     # Conversation management
 │   │   └── openai_client.py # OpenAI API integration
-│   ├── word_detection/     # Wake word detection
-│   │   └── detector.py     # Wake word processing
-│   ├── utils/             # Utility functions
-│   │   └── types.py       # Type definitions and protocols
-│   └── assets/            # Sound files and resources
-│       └── bing.mp3       # Activation sound
-├── requirements.txt       # Python dependencies
-└── .env                # Environment configuration
+│   ├── word_detection/    # Wake word detection
+│   │   └── detector.py    # Wake word processing
+│   ├── utils/            # Utility functions
+│   │   ├── audio_setup.py  # Audio device configuration
+│   │   ├── list_devices.py # Device enumeration utilities
+│   │   └── types.py      # Type definitions and protocols
+│   └── assets/           # Sound files and resources
+│       └── bing.mp3      # Activation sound
+├── tests/               # Test suite
+├── scripts/             # Utility scripts
+├── pyproject.toml      # Project configuration
+├── setup.py           # Package setup
+├── requirements.txt    # Python dependencies
+├── requirements-test.txt # Test dependencies
+└── .env               # Environment configuration
 ```
 
 ## Configuration
@@ -214,12 +223,12 @@ pytest tests/unit/test_audio_recorder.py -v -s
    - Ensure input volume is not muted/too low
 
 3. Common Issues:
-   - **BlackHole Selected**: If BlackHole 2ch is selected instead of your microphone:
+   - **Incorrect Audio Device**: If a virtual audio device is selected instead of your microphone:
      ```bash
      # Check available audio devices
      python -m src.utils.list_devices
      
-     # Force microphone selection by setting AUDIO_DEVICE environment variable
+     # Force microphone selection by setting AUDIO_DEVICE environment variable, e.g.:
      export AUDIO_DEVICE="MacBook Pro Microphone"
      python -m src.app
      ```
