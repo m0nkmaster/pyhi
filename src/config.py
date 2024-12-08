@@ -13,10 +13,10 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.8
+    wake_word_silence_threshold: float = 1.2
     response_silence_threshold: float = 1.0
-    buffer_duration: float = 0.8
-    min_phrase_duration: float = 1.5
+    buffer_duration: float = 1.5
+    min_phrase_duration: float = 1.0
     max_phrase_duration: float = 15.0
 
 
@@ -24,13 +24,17 @@ class AudioRecorderConfig:
 class AudioDeviceConfig:
     # Device selection
     auto_select_device: bool = True
-    preferred_input_device_name: str = "Jabra Link 370"  # Your Jabra device
-    preferred_output_device_name: str = "Jabra Link 370"  # Your Jabra device
+    preferred_input_device_name: str | None = None  # Set to None by default
+    preferred_output_device_name: str | None = None  # Set to None by default
+    excluded_device_names: list[str] = field(default_factory=lambda: ["BlackHole", "ZoomAudioDevice"])
     fallback_to_default: bool = True
     
-    # Audio quality - Based on Jabra Link 370 capabilities
-    preferred_sample_rates: list[int] = field(default_factory=lambda: [16000])  # Jabra supports 16kHz
-    preferred_channels: list[int] = field(default_factory=lambda: [1])  # Mono audio
+    # Device selection priority
+    prefer_builtin_device: bool = True  # Will prefer built-in mic if no preferred device found
+    
+    # Audio quality
+    preferred_sample_rates: list[int] = field(default_factory=lambda: [48000, 44100, 16000])
+    preferred_channels: list[int] = field(default_factory=lambda: [1, 2])  # Mono preferred, but stereo ok
     
     # Buffer settings
     buffer_size_ms: int = 50  # Used to calculate chunk_size based on sample rate
@@ -40,8 +44,8 @@ class AudioDeviceConfig:
     max_retries: int = 3
     
     # Debug options
-    list_devices_on_start: bool = True  # Set to True initially to verify device selection
-    debug_audio: bool = True  # Set to True initially to help diagnose any issues
+    list_devices_on_start: bool = True
+    debug_audio: bool = False  # Set to False by default for production
 
 
 @dataclass
@@ -67,9 +71,9 @@ class SpeechDetectionConfig:
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 16000
+    sample_rate: int = 48000
     channels: int = 1
-    chunk_size: int = 256
+    chunk_size: int = 512
     format: int = pyaudio.paInt16
     input_device_index: int | None = None
     output_device_index: int | None = None
@@ -77,7 +81,7 @@ class AudioConfig:
     speech_config: SpeechDetectionConfig = field(default_factory=SpeechDetectionConfig)
 
     def __post_init__(self):
-        if self.chunk_size == 256:
+        if self.chunk_size == 512:
             self.chunk_size = int(self.sample_rate * (self.device_config.buffer_size_ms / 1000))
 
 
@@ -93,7 +97,7 @@ class AudioPlayerConfig:
 @dataclass
 class ChatConfig:
     model: str = "gpt-4-turbo"  # Using faster model
-    max_completion_tokens: int = 75  # Further reduced for even quicker responses
+    max_completion_tokens: int = 250  # Further reduced for even quicker responses
     temperature: float = 0.7
     system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
 
@@ -109,7 +113,8 @@ class WordDetectionConfig:
     model: str = "whisper-1"
     temperature: float = 0.0
     language: str = "en"
-    min_audio_size: int = 1024  # Reduced from 2048 for faster processing
+    min_audio_size: int = 4096
+    similarity_threshold: float = 0.75
 
 
 @dataclass
