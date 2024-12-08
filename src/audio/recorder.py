@@ -59,14 +59,16 @@ class PyAudioRecorder:
     def _list_audio_devices(self) -> list[dict]:
         """List all available Audio Input Devices."""
         input_devices = []
+        default_input = self.audio.get_default_input_device_info()
         
         for i in range(self.audio.get_device_count()):
             try:
                 dev_info = self.audio.get_device_info_by_index(i)
                 name = str(dev_info['name']).lower()
                 
-                # Skip virtual devices
-                if any(x in name for x in ['blackhole', 'virtual', 'loopback', 'microsoft teams']):
+                # Skip devices with known virtual keywords
+                virtual_keywords = ['blackhole', 'virtual', 'loopback', 'teams', 'soundflower', 'aggregate']
+                if any(x in name for x in virtual_keywords):
                     if hasattr(self.config, 'device_config') and getattr(self.config.device_config, 'debug_audio', False):
                         print(f"Skipping virtual device: {name}")
                     continue
@@ -75,9 +77,11 @@ class PyAudioRecorder:
                     device = {
                         'index': i,
                         'name': dev_info['name'],
-                        'channels': dev_info['maxInputChannels'],
-                        'sample_rate': dev_info['defaultSampleRate'],
-                        'is_builtin': 'built-in' in name or 'internal' in name or 'macbook' in name
+                        'channels': int(dev_info['maxInputChannels']),
+                        'sample_rate': int(dev_info['defaultSampleRate']),
+                        'is_default': i == default_input['index'],
+                        'latency': float(dev_info.get('defaultLowInputLatency', 0)),
+                        'is_builtin': any(x in name for x in ['built-in', 'internal', 'system'])
                     }
                     input_devices.append(device)
             except Exception as e:
@@ -85,6 +89,8 @@ class PyAudioRecorder:
                     print(f"Error getting device info for index {i}: {e}")
                 continue
                 
+        # Sort devices by priority (built-in first, then by latency)
+        input_devices.sort(key=lambda d: (not d['is_builtin'], d['latency']))
         return input_devices
 
     def _find_compatible_device(self, devices: list[dict]) -> Optional[dict]:
@@ -92,37 +98,34 @@ class PyAudioRecorder:
         if not devices:
             return None
             
-        # If no device config, prefer built-in devices
-        if not hasattr(self.config, 'device_config'):
-            # First try to find MacBook Pro Microphone
-            for device in devices:
-                if 'macbook pro microphone' in device['name'].lower():
-                    return device
+        # If no device config or no preferred device, use priority-based selection
+        if not hasattr(self.config, 'device_config') or \
+           not hasattr(self.config.device_config, 'preferred_input_device_name') or \
+           not self.config.device_config.preferred_input_device_name:
             
-            # Then try any built-in device
-            for device in devices:
-                if device['is_builtin']:
-                    return device
+            # First try to find a built-in device
+            built_in_devices = [d for d in devices if d['is_builtin']]
+            if built_in_devices:
+                # Among built-in devices, prefer the one with lowest latency
+                return min(built_in_devices, key=lambda d: d['latency'])
             
-            # Fallback to first device
-            return devices[0]
+            # If no built-in device, use the default device if available
+            default_devices = [d for d in devices if d['is_default']]
+            if default_devices:
+                return default_devices[0]
             
-        # Check if preferred device name is specified and exists
-        if hasattr(self.config.device_config, 'preferred_input_device_name') and self.config.device_config.preferred_input_device_name:
-            for device in devices:
-                if self.config.device_config.preferred_input_device_name.lower() in device['name'].lower():
-                    return device
+            # Last resort: use the device with the lowest latency
+            return min(devices, key=lambda d: d['latency'])
+            
+        # If preferred device name is specified, try to find it
+        preferred_name = self.config.device_config.preferred_input_device_name.lower()
+        matching_devices = [d for d in devices if preferred_name in d['name'].lower()]
+        if matching_devices:
+            # If multiple matches, prefer built-in or lowest latency
+            return min(matching_devices, key=lambda d: (not d['is_builtin'], d['latency']))
         
-        # If no preferred device found, use the same fallback logic
-        for device in devices:
-            if 'macbook pro microphone' in device['name'].lower():
-                return device
-        
-        for device in devices:
-            if device['is_builtin']:
-                return device
-        
-        return devices[0] if devices else None
+        # If preferred device not found, fall back to priority-based selection
+        return self._find_compatible_device([d for d in devices if d != self.config.device_config.preferred_input_device_name])
 
     def _setup_audio_device(self) -> None:
         """Set up the audio input device based on configuration."""
