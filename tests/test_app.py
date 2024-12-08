@@ -77,6 +77,7 @@ def test_init_with_default_config(mock_openai):
             # Mock device info
             mock_device = {
                 'maxInputChannels': 2,
+                'maxOutputChannels': 2,
                 'defaultSampleRate': 44100,
                 'name': 'Test Device'
             }
@@ -99,6 +100,7 @@ def test_init_with_custom_config(mock_openai):
             # Mock device info
             mock_device = {
                 'maxInputChannels': 2,
+                'maxOutputChannels': 2,
                 'defaultSampleRate': 44100,
                 'name': 'Test Device'
             }
@@ -132,6 +134,7 @@ def test_init_no_activation_sound(mock_openai):
             # Mock device info
             mock_device = {
                 'maxInputChannels': 2,
+                'maxOutputChannels': 2,
                 'defaultSampleRate': 44100,
                 'name': 'Test Device'
             }

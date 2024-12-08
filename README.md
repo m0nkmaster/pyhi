@@ -180,3 +180,56 @@ See our [Development Roadmap](./ROADMAP.md) for planned features and improvement
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details
+
+### macOS Audio Setup
+
+1. Check microphone permissions:
+   - Go to System Preferences > Security & Privacy > Privacy > Microphone
+   - Ensure your terminal or IDE has microphone access
+
+2. Verify audio input:
+```bash
+# Run the audio device test
+pytest tests/unit/test_audio_recorder.py -v -s
+```
+
+3. If no input is detected, try these solutions:
+   - Quit and restart Terminal/IDE after granting permissions
+   - Use headphones with built-in mic instead of built-in microphone
+   - Check System Preferences > Sound > Input for correct input device
+   - Try different sample rates (44100 or 48000) in config
+
+### Troubleshooting
+
+#### macOS Audio Issues
+
+1. Check System Settings
+   - Go to System Settings > Privacy & Security > Microphone
+   - Ensure Terminal/IDE has microphone access
+   - Restart Terminal/IDE after granting permissions
+
+2. Check Audio Input Settings
+   - Go to System Settings > Sound > Input
+   - Select "MacBook Pro Microphone" or your preferred input device
+   - Ensure input volume is not muted/too low
+
+3. Common Issues:
+   - **BlackHole Selected**: If BlackHole 2ch is selected instead of your microphone:
+     ```bash
+     # Check available audio devices
+     python -m src.utils.list_devices
+     
+     # Force microphone selection by setting AUDIO_DEVICE environment variable
+     export AUDIO_DEVICE="MacBook Pro Microphone"
+     python -m src.app
+     ```
+   
+   - **No Sound Detected**: 
+     - Try increasing input volume in System Settings
+     - Check if microphone is being used by another application
+     - Try unplugging and replugging any external audio devices
+
+4. Virtual Audio Devices:
+   - BlackHole, Microsoft Teams Audio, and other virtual devices should be avoided
+   - The app will try to use physical microphones first
+   - If using virtual audio routing, ensure proper configuration in Audio MIDI Setup

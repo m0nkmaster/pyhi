@@ -1,12 +1,28 @@
-from typing import Protocol, List, Dict, Optional, Callable
+from typing import Protocol, List, Dict, Optional, Callable, Any
 from dataclasses import dataclass
-from ..config import AudioConfig
+import pyaudio
+
+class AudioConfig:
+    def __init__(
+        self,
+        sample_rate: int = 48000,
+        channels: int = 1,
+        chunk_size: int = 1024,
+        format: int = pyaudio.paInt16,
+        input_device_index: int | None = None,
+        use_plughw: bool = False
+    ):
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.chunk_size = chunk_size
+        self.format = format
+        self.input_device_index = input_device_index
+        self.use_plughw = use_plughw
 
 @dataclass
-class AudioFrame(object):
-    def __init__(self, data: bytes, is_speech: bool):
-        self.data = data
-        self.is_speech = is_speech
+class AudioFrame:
+    data: bytes
+    is_speech: bool
 
 class AudioRecorder(Protocol):
     def start_recording(self) -> None:
@@ -18,7 +34,7 @@ class AudioRecorder(Protocol):
         ...
 
 class AudioAnalyzer(Protocol):
-    def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
+    def is_speech(self, audio_data: bytes, config: Any) -> bool:
         """Analyze audio data to determine if it contains speech."""
         ...
 
