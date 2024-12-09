@@ -42,7 +42,7 @@ def mock_audio_config(mock_device_config):
 def mock_recorder_config():
     return AudioRecorderConfig(
         wake_word_silence_threshold=0.7,
-        response_silence_threshold=0.5,
+        response_silence_threshold=0.02,  # Just slightly less than one chunk duration
         buffer_duration=0.0
     )
 
@@ -196,20 +196,47 @@ def test_stop_recording_no_speech(mock_sleep, mock_pyaudio, mock_analyzer, mock_
     
     # Create a counter to control how many chunks to return
     chunk_counter = 0
+    stream_active = True
     def read_side_effect(*args, **kwargs):
-        nonlocal chunk_counter
+        nonlocal chunk_counter, stream_active
+        if not stream_active:  # Stop returning data after stream is stopped
+            return b''
         chunk_counter += 1
-        if chunk_counter <= 4:  # Return 4 chunks before "stopping"
+        if chunk_counter <= 3:  # Return 3 chunks before "stopping"
             return f'chunk{chunk_counter}'.encode()
-        return b''  # Return empty data after 4 chunks
+        return b''  # Return empty data after 3 chunks
+    
+    # Mock the stream's methods
+    def stop_stream():
+        nonlocal stream_active
+        stream_active = False
     
     mock_stream.read.side_effect = read_side_effect
-    mock_analyzer.is_speech.return_value = False  # No speech detected
+    mock_stream.stop_stream.side_effect = stop_stream
+    mock_stream._is_input_stream = True  # Add this property
+    
+    # Create a list to track speech detection results
+    speech_results = [False, True, True, False]  # Only chunks 2 and 3 contain speech
+    speech_counter = 0
+    def is_speech_side_effect(data, config):
+        nonlocal speech_counter
+        if not stream_active:  # Don't process speech after stream is stopped
+            return False
+        result = speech_results[speech_counter] if speech_counter < len(speech_results) else False
+        speech_counter += 1
+        return result
+    
+    mock_analyzer.is_speech.side_effect = is_speech_side_effect
     
     audio_data = recorder.stop_recording()
     assert isinstance(audio_data, bytes)
-    assert b'chunk1' in audio_data
-    assert b'chunk2' in audio_data
+    # chunk1 should be included as it's in the pre-speech buffer when speech is detected in chunk2
+    assert b'chunk1' in audio_data  # Pre-speech buffer
+    assert b'chunk2' in audio_data  # First chunk with speech
+    assert b'chunk3' in audio_data  # Second chunk with speech
+    # Verify that we immediately stop after speech ends and don't include any more chunks
+    assert audio_data.endswith(b'chunk3')  # Should end with the last speech chunk
+    assert b'chunk4' not in audio_data  # Should not include any chunks after speech ends
 
 @patch('time.sleep', return_value=None)  # Prevent actual sleeping
 def test_stop_recording_with_speech(mock_sleep, mock_pyaudio, mock_analyzer, mock_audio_config, mock_stream):
@@ -346,12 +373,17 @@ def test_stop_recording_io_error(mock_sleep, mock_pyaudio, mock_analyzer, mock_a
         return b''
     
     mock_stream.read.side_effect = read_side_effect
-    mock_analyzer.is_speech.return_value = False  # No speech to trigger stop
+    # Simulate speech detection for chunks 2 and 3
+    def is_speech_side_effect(data, config):
+        chunk_num = int(data.decode().replace('chunk', ''))
+        return chunk_num in [2, 3]
+    
+    mock_analyzer.is_speech.side_effect = is_speech_side_effect
     
     audio_data = recorder.stop_recording()
     assert isinstance(audio_data, bytes)
-    assert b'chunk2' in audio_data
-    assert b'chunk3' in audio_data
+    assert b'chunk2' in audio_data  # First chunk with speech
+    assert b'chunk3' in audio_data  # Second chunk with speech
 
 @patch('time.sleep', return_value=None)  # Prevent actual sleeping
 def test_stop_recording_error_with_callback(mock_sleep, mock_pyaudio, mock_analyzer, mock_audio_config, mock_stream):
