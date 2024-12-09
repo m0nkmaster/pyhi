@@ -425,3 +425,192 @@ def test_stop_recording_stream_close_error(mock_pyaudio, mock_analyzer, mock_aud
     # Audio data should still be returned
     assert isinstance(audio_data, bytes)
     assert len(audio_data) > 0
+
+@patch('time.sleep', return_value=None)  # Prevent actual sleeping
+def test_list_audio_devices_with_debug(mock_sleep, mock_pyaudio, mock_analyzer, mock_audio_config):
+    # Create a proper device config
+    class DeviceConfig:
+        def __init__(self):
+            self.debug_audio = True
+            self.preferred_input_device_name = None
+            self.excluded_device_names = []
+            self.fallback_to_default = True
+            self.list_devices_on_start = False
+    mock_audio_config.device_config = DeviceConfig()
+    
+    # Mock device info that should be skipped (virtual device)
+    virtual_device = {
+        'name': 'BlackHole 16ch',
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 0,
+        'defaultLowInputLatency': 0.1,
+        'defaultHighInputLatency': 0.2
+    }
+    
+    # Mock device info for a regular device that should be included
+    regular_device = {
+        'name': 'Built-in Microphone (Core Audio)',
+        'maxInputChannels': 2,
+        'defaultSampleRate': 44100,
+        'index': 1,
+        'defaultLowInputLatency': 0.1,
+        'defaultHighInputLatency': 0.2
+    }
+    
+    def get_device_info_side_effect(index):
+        if index == 0:
+            return virtual_device
+        elif index == 1:
+            return regular_device
+        raise Exception("Test error getting device info")
+    
+    # Override the default mock behavior
+    mock_pyaudio.return_value.get_device_count.return_value = 2
+    mock_pyaudio.return_value.get_device_info_by_index.side_effect = get_device_info_side_effect
+    mock_pyaudio.return_value.get_default_input_device_info.return_value = regular_device
+    
+    recorder = PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer)
+    devices = recorder._list_audio_devices()
+    
+    # Verify that only the regular device is in the list and virtual device is skipped
+    assert len(devices) == 1
+    device = devices[0]
+    assert device['name'] == regular_device['name']
+    assert device['channels'] == regular_device['maxInputChannels']
+    assert device['sample_rate'] == regular_device['defaultSampleRate']
+    assert device['latency'] == regular_device['defaultLowInputLatency']
+    assert device['is_builtin'] == True  # Should be True because name contains 'built-in'
+    assert device['is_default'] == True  # Should be True because it matches default device
+    assert device['index'] == regular_device['index']
+
+@patch('time.sleep', return_value=None)  # Prevent actual sleeping
+def test_find_device_with_preferred_name(mock_sleep, mock_pyaudio, mock_analyzer, mock_audio_config):
+    # Create a new device config with preferred device name
+    class DeviceConfig:
+        def __init__(self):
+            self.preferred_input_device_name = "Built-in"
+            self.debug_audio = False
+            self.excluded_device_names = []
+            self.fallback_to_default = True
+            self.list_devices_on_start = False
+    mock_audio_config.device_config = DeviceConfig()
+    
+    # Create test devices with all required fields
+    devices = [
+        {
+            'index': 0,
+            'name': 'Built-in Microphone (Core Audio)',
+            'maxInputChannels': 2,
+            'defaultSampleRate': 44100,
+            'defaultLowInputLatency': 0.1,
+            'defaultHighInputLatency': 0.2,
+            'channels': 2,
+            'sample_rate': 44100,
+            'latency': 0.1,
+            'is_builtin': True,
+            'is_default': False
+        },
+        {
+            'index': 1,
+            'name': 'Built-in Input (Core Audio)',
+            'maxInputChannels': 2,
+            'defaultSampleRate': 44100,
+            'defaultLowInputLatency': 0.05,
+            'defaultHighInputLatency': 0.2,
+            'channels': 2,
+            'sample_rate': 44100,
+            'latency': 0.05,
+            'is_builtin': True,
+            'is_default': True
+        },
+        {
+            'index': 2,
+            'name': 'External Mic',
+            'maxInputChannels': 2,
+            'defaultSampleRate': 44100,
+            'defaultLowInputLatency': 0.01,
+            'defaultHighInputLatency': 0.2,
+            'channels': 2,
+            'sample_rate': 44100,
+            'latency': 0.01,
+            'is_builtin': False,
+            'is_default': False
+        }
+    ]
+    
+    def get_device_info_side_effect(index):
+        return next((d for d in devices if d['index'] == index), None)
+    
+    mock_pyaudio.get_device_count.return_value = len(devices)
+    mock_pyaudio.get_device_info_by_index.side_effect = get_device_info_side_effect
+    mock_pyaudio.get_default_input_device_info.return_value = next(d for d in devices if d['is_default'])
+    
+    recorder = PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer)
+    selected_device = recorder._find_compatible_device(devices)
+    
+    # Should select the Built-in Input due to matching name and lower latency
+    assert selected_device['index'] == 1
+    assert selected_device['name'] == 'Built-in Input (Core Audio)'
+    assert selected_device['is_builtin'] == True
+    assert selected_device['is_default'] == True
+    assert selected_device['latency'] == 0.05
+
+@patch('time.sleep', return_value=None)  # Prevent actual sleeping
+def test_find_device_preferred_not_found(mock_sleep, mock_pyaudio, mock_analyzer, mock_audio_config):
+    # Create a new device config with non-existent preferred device name
+    class DeviceConfig:
+        def __init__(self):
+            self.preferred_input_device_name = "NonExistent"
+            self.debug_audio = False
+            self.excluded_device_names = []
+            self.fallback_to_default = True
+            self.list_devices_on_start = False
+    mock_audio_config.device_config = DeviceConfig()
+    
+    # Create test devices with all required fields
+    devices = [
+        {
+            'index': 0,
+            'name': 'Built-in Microphone (Core Audio)',
+            'maxInputChannels': 2,
+            'defaultSampleRate': 44100,
+            'defaultLowInputLatency': 0.1,
+            'defaultHighInputLatency': 0.2,
+            'channels': 2,
+            'sample_rate': 44100,
+            'latency': 0.1,
+            'is_builtin': True,
+            'is_default': True
+        },
+        {
+            'index': 1,
+            'name': 'External Mic',
+            'maxInputChannels': 2,
+            'defaultSampleRate': 44100,
+            'defaultLowInputLatency': 0.01,
+            'defaultHighInputLatency': 0.2,
+            'channels': 2,
+            'sample_rate': 44100,
+            'latency': 0.01,
+            'is_builtin': False,
+            'is_default': False
+        }
+    ]
+    
+    def get_device_info_side_effect(index):
+        return next((d for d in devices if d['index'] == index), None)
+    
+    mock_pyaudio.get_device_count.return_value = len(devices)
+    mock_pyaudio.get_device_info_by_index.side_effect = get_device_info_side_effect
+    mock_pyaudio.get_default_input_device_info.return_value = next(d for d in devices if d['is_default'])
+    
+    recorder = PyAudioRecorder(config=mock_audio_config, analyzer=mock_analyzer)
+    selected_device = recorder._find_compatible_device(devices)
+    
+    # Should fall back to built-in device since it's also the default
+    assert selected_device['index'] == 0
+    assert selected_device['name'] == 'Built-in Microphone (Core Audio)'
+    assert selected_device['is_builtin'] == True
+    assert selected_device['is_default'] == True
+    assert selected_device['latency'] == 0.1
