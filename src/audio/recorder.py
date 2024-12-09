@@ -197,13 +197,14 @@ class PyAudioRecorder:
         
         try:
             frames = []
+            pre_speech_buffer = []  # Buffer to catch the start of speech
             silence_counter = 0
             session_silence_counter = 0
             speech_detection_buffer = []
             is_recording = False
             
             silence_threshold = (self.wake_word_silence_threshold if is_wake_word_mode 
-                               else self.response_silence_threshold)
+                           else self.response_silence_threshold)
             
             if self.config.device_config.debug_audio:
                 print("\nRecording..." if not is_wake_word_mode else "Listening for trigger word...")
@@ -217,6 +218,12 @@ class PyAudioRecorder:
                     if self.config.device_config.debug_audio:
                         print(f"IOError during recording: {e}")
                     continue
+                
+                # Maintain pre-speech buffer
+                if not is_recording:
+                    pre_speech_buffer.append(data)
+                    if len(pre_speech_buffer) > 4:  # Keep only the last 4 chunks
+                        pre_speech_buffer.pop(0)
                 
                 # Maintain rolling buffer for all modes
                 self.audio_buffer.append(data)
@@ -233,31 +240,40 @@ class PyAudioRecorder:
                 if any(speech_detection_buffer):
                     if not is_recording:
                         is_recording = True
-                        # Include buffer content when speech starts in any mode
-                        frames.extend(self.audio_buffer[-4:])  # Include last ~100ms before speech
+                        # Include the last 2 chunks before speech was detected
+                        frames.extend(pre_speech_buffer[-2:])
                     frames.append(data)
                     silence_counter = 0
                 elif is_recording:
-                    # Continue collecting frames after speech until silence threshold
-                    frames.append(data)
-                
-                # Handle silence detection
-                if len(speech_detection_buffer) >= 2 and not any(speech_detection_buffer[-2:]):
-                    silence_counter += self.config.chunk_size / self.config.sample_rate
-                    if silence_counter >= silence_threshold:
-                        if not is_wake_word_mode or is_recording:
-                            break
+                    # Don't append frames during silence after speech
+                    silence_counter += 1  # Increment by 1 chunk
+                    # Calculate silence duration in seconds
+                    chunk_duration = self.config.chunk_size / self.config.sample_rate
+                    silence_duration = silence_counter * chunk_duration
+                    if silence_duration >= silence_threshold:
+                        try:
+                            self.stream.stop_stream()  # Stop reading from stream immediately
+                            break  # Break immediately when silence threshold is reached
+                        except Exception as e:
+                            if self.config.device_config.debug_audio:
+                                print(f"Error stopping stream: {e}")
+                            self.on_error(e)
+                            break  # Still break even if stopping fails
                 else:
                     silence_counter = 0
             
-            self.stream.stop_stream()
-            try:
-                self.stream.close()
-            except Exception as e:
-                if self.config.device_config.debug_audio:
-                    print(f"Error closing stream: {e}")
-                self.on_error(e)
-            self.stream = None
+            # Always try to clean up the stream
+            if self.stream:
+                try:
+                    if self.stream._is_input_stream:  # Check if stream is still active
+                        self.stream.stop_stream()
+                    self.stream.close()
+                except Exception as e:
+                    if self.config.device_config.debug_audio:
+                        print(f"Error closing stream: {e}")
+                    self.on_error(e)
+                finally:
+                    self.stream = None
             
             return b''.join(frames)
             
