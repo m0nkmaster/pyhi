@@ -254,17 +254,23 @@ class PyAudioRecorder:
                 if any(speech_detection_buffer):
                     if not is_recording:
                         is_recording = True
+                        if self.config.device_config.debug_audio:
+                            print(f"Speech detected, starting recording...")
                         # Include the last 2 chunks before speech was detected
                         frames.extend(pre_speech_buffer[-2:])
                     frames.append(data)
-                    silence_counter = 0
+                    silence_counter = -10  # This gives us ~0.2s extra buffer after speech
                 elif is_recording:
                     # Don't append frames during silence after speech
                     silence_counter += 1  # Increment by 1 chunk
                     # Calculate silence duration in seconds
                     chunk_duration = self.config.chunk_size / self.config.sample_rate
                     silence_duration = silence_counter * chunk_duration
+                    if self.config.device_config.debug_audio and silence_counter % 10 == 0:
+                        print(f"Silence duration: {silence_duration:.2f}s / {silence_threshold:.2f}s")
                     if silence_duration >= silence_threshold:
+                        if self.config.device_config.debug_audio:
+                            print(f"Silence threshold reached ({silence_duration:.2f}s), stopping recording")
                         try:
                             self.stream.stop_stream()  # Stop reading from stream immediately
                             break  # Break immediately when silence threshold is reached
@@ -279,12 +285,12 @@ class PyAudioRecorder:
             # Always try to clean up the stream
             if self.stream:
                 try:
-                    if self.stream._is_input_stream:  # Check if stream is still active
-                        self.stream.stop_stream()
+                    # Don't check _is_input_stream since it might be missing
+                    self.stream.stop_stream()
                     self.stream.close()
                 except Exception as e:
                     if self.config.device_config.debug_audio:
-                        print(f"Error closing stream: {e}")
+                        print(f"Error cleaning up stream: {e}")
                     self.on_error(e)
                 finally:
                     self.stream = None
