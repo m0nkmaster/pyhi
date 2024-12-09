@@ -189,6 +189,14 @@ class VoiceAssistant:
                     logging.info("No speech detected in recording")
                     continue
                 
+                # Save audio data to file (needed for OpenAI API)
+                with wave.open("recording.wav", "wb") as wf:
+                    wf.setnchannels(self.audio_config.channels)
+                    wf.setsampwidth(2)  # 16-bit audio
+                    wf.setframerate(self.audio_config.sample_rate)
+                    wf.writeframes(audio_data)
+                
+                # Start transcription immediately after recording
                 logging.info("Transcribing audio...")
                 transcript = self.openai_wrapper.transcribe_audio("recording.wav")
                 if not transcript:
@@ -197,7 +205,7 @@ class VoiceAssistant:
                 
                 logging.info(f"\nYou said: {transcript}")
                 
-                # Get assistant response
+                # Get assistant response in parallel with cleanup
                 logging.info("Getting assistant response...")
                 self.conversation_manager.add_user_message(transcript)
                 response = self.openai_wrapper.get_chat_completion(

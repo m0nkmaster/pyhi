@@ -103,22 +103,23 @@ class OpenAIWrapper:
         
         Args:
             audio_file: Path to the audio file
-            language: Language code
+            language: Language code (e.g., 'en' for English)
             temperature: Sampling temperature
         
         Returns:
-            Optional[str]: Transcribed text or None if failed
+            Optional[str]: Transcribed text if successful, None if failed
         """
         try:
+            # Open file in binary mode for direct upload
             with open(audio_file, "rb") as audio:
-                transcript = self.client.audio.transcriptions.create(
+                response = self.client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio,
                     language=language,
-                    response_format="text",
-                    temperature=temperature
+                    temperature=temperature,
+                    response_format="text"  # Get plain text for faster response
                 )
-            return transcript
+            return str(response)
         except Exception as e:
             print(f"Error transcribing audio: {e}")
-            return None 
+            return None
