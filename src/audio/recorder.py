@@ -124,8 +124,22 @@ class PyAudioRecorder:
             # If multiple matches, prefer built-in or lowest latency
             return min(matching_devices, key=lambda d: (not d['is_builtin'], d['latency']))
         
-        # If preferred device not found, fall back to priority-based selection
-        return self._find_compatible_device([d for d in devices if d != self.config.device_config.preferred_input_device_name])
+        # If preferred device not found and fallback is enabled, use priority-based selection
+        if hasattr(self.config.device_config, 'fallback_to_default') and self.config.device_config.fallback_to_default:
+            # First try to find a built-in device
+            built_in_devices = [d for d in devices if d['is_builtin']]
+            if built_in_devices:
+                return min(built_in_devices, key=lambda d: d['latency'])
+            
+            # If no built-in device, use the default device if available
+            default_devices = [d for d in devices if d['is_default']]
+            if default_devices:
+                return default_devices[0]
+            
+            # Last resort: use the device with the lowest latency
+            return min(devices, key=lambda d: d['latency'])
+            
+        return None
 
     def _setup_audio_device(self) -> None:
         """Set up the audio input device based on configuration."""

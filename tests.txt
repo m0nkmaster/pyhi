@@ -1,17 +1,30 @@
 ============================= test session starts ==============================
-platform darwin -- Python 3.13.0, pytest-8.3.4, pluggy-1.5.0
+platform darwin -- Python 3.13.0, pytest-8.3.4, pluggy-1.5.0 -- /Users/robmacdonald/.pyenv/versions/chat-button/bin/python
+cachedir: .pytest_cache
 rootdir: /Users/robmacdonald/Documents/projects/pyhi
 configfile: pyproject.toml
 plugins: cov-6.0.0, anyio-3.7.1, mock-3.14.0
-collected 94 items
+collecting ... collected 20 items
 
-tests/audio/test_analyzer.py ...                                         [  3%]
-tests/audio/test_player.py .................                             [ 21%]
-tests/audio/test_recorder.py .................                           [ 39%]
-tests/conversation/test_manager.py ............                          [ 52%]
-tests/conversation/test_openai_client.py .........                       [ 61%]
-tests/test_app.py .......................                                [ 86%]
-tests/unit/test_audio_recorder.py .                                      [ 87%]
-tests/word_detection/test_detector.py ............                       [100%]
+tests/audio/test_recorder.py::test_init_with_valid_device PASSED         [  5%]
+tests/audio/test_recorder.py::test_init_with_no_input_channels PASSED    [ 10%]
+tests/audio/test_recorder.py::test_init_error_callback PASSED            [ 15%]
+tests/audio/test_recorder.py::test_init_with_no_device_index PASSED      [ 20%]
+tests/audio/test_recorder.py::test_cleanup_error_handling PASSED         [ 25%]
+tests/audio/test_recorder.py::test_start_recording PASSED                [ 30%]
+tests/audio/test_recorder.py::test_start_recording_error PASSED          [ 35%]
+tests/audio/test_recorder.py::test_stop_recording_no_speech PASSED       [ 40%]
+tests/audio/test_recorder.py::test_stop_recording_with_speech PASSED     [ 45%]
+tests/audio/test_recorder.py::test_stop_recording_wake_word_mode PASSED  [ 50%]
+tests/audio/test_recorder.py::test_stop_recording_error_handling PASSED  [ 55%]
+tests/audio/test_recorder.py::test_stop_recording_without_start PASSED   [ 60%]
+tests/audio/test_recorder.py::test_cleanup_on_deletion PASSED            [ 65%]
+tests/audio/test_recorder.py::test_init_with_no_input_devices PASSED     [ 70%]
+tests/audio/test_recorder.py::test_stop_recording_io_error PASSED        [ 75%]
+tests/audio/test_recorder.py::test_stop_recording_error_with_callback PASSED [ 80%]
+tests/audio/test_recorder.py::test_stop_recording_stream_close_error PASSED [ 85%]
+tests/audio/test_recorder.py::test_list_audio_devices_with_debug PASSED  [ 90%]
+tests/audio/test_recorder.py::test_find_device_with_preferred_name PASSED [ 95%]
+tests/audio/test_recorder.py::test_find_device_preferred_not_found PASSED [100%]
 
-============================== 94 passed in 0.66s ==============================
+============================== 20 passed in 0.05s ==============================
