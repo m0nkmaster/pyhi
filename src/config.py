@@ -13,7 +13,7 @@ if not os.getenv("OPENAI_API_KEY"):
 
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.5
+    wake_word_silence_threshold: float = 1.5
     response_silence_threshold: float = 2.0
     buffer_duration: float = 1.5
 
@@ -36,28 +36,28 @@ class AudioDeviceConfig:
     
     # Debug options
     list_devices_on_start: bool = True
-    debug_audio: bool = False  # Set to False by default for production
+    debug_audio: bool = True  # Enable debug mode temporarily
 
 
 @dataclass
 class SpeechDetectionConfig:
     # Base threshold for speech detection
-    base_threshold: int = 1000
+    base_threshold: int = 500
     
     # Multipliers for different checks
-    loudness_multiplier: float = 1.2
-    background_noise_multiplier: float = 2.0
-    signal_to_noise_threshold: float = 3.0
-    magnitude_multiplier: float = 2.5
-    variation_multiplier: float = 1.2
-    rms_multiplier: float = 1.5
+    loudness_multiplier: float = 1.0
+    background_noise_multiplier: float = 1.5
+    signal_to_noise_threshold: float = 2.0
+    magnitude_multiplier: float = 2.0
+    variation_multiplier: float = 1.0
+    rms_multiplier: float = 1.2
     
     # Frequency range for speech
     min_speech_freq: int = 85
     max_speech_freq: int = 3000
     
     # Variation threshold divisor
-    variation_divisor: float = 2.0
+    variation_divisor: float = 3.0
 
 
 @dataclass
