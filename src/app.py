@@ -9,6 +9,8 @@ import logging
 import speech_recognition as sr
 import threading
 import queue
+import signal
+import sys
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +46,10 @@ def print_with_emoji(message: str, emoji: str):
 class VoiceAssistant:
     def __init__(self, words: list[str], timeout_seconds: float | None = None):
         """Initialize the voice assistant."""
+        self.running = True
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        
         logging.info("Initializing VoiceAssistant...")
         print_with_emoji("Initializing VoiceAssistant...", "🤖")
         
@@ -208,7 +214,7 @@ class VoiceAssistant:
         logging.info("Press Ctrl+C to quit")
         
         try:
-            while True:
+            while self.running:
                 # Check for timeout when awake
                 if self.is_awake:
                     if self._check_timeout():
@@ -334,9 +340,8 @@ class VoiceAssistant:
                                 print_with_emoji("Speech recognition error. Please try again.", "❌")
                 except Exception as e:
                     logging.error(f"Error processing audio: {e}")
-        except KeyboardInterrupt:
-            logging.info("Shutting down...")
-            print_with_emoji("Shutting down...", "🔌")
+        except Exception as e:
+            logging.error(f"Error running voice assistant: {e}")
         finally:
             self._cleanup()
 
@@ -433,6 +438,19 @@ class VoiceAssistant:
             return False
         
         return True
+
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals gracefully."""
+        print_with_emoji("\nShutting down gracefully...", "👋")
+        logging.info("Received shutdown signal")
+        self.running = False
+        if self.audio_recorder and self.audio_recorder.stream:
+            self.audio_recorder.stream.stop_stream()
+            self.audio_recorder.stream.close()
+        if hasattr(self, 'audio_recorder') and hasattr(self.audio_recorder, 'audio'):
+            self.audio_recorder.audio.terminate()
+        self._cleanup()
+        sys.exit(0)
 
     def _cleanup(self):
         """Clean up temporary files."""

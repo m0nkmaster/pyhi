@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import pyaudio
 import os
 from dotenv import load_dotenv
+import platform
 
 # Load environment variables from .env file
 load_dotenv()
@@ -119,8 +120,13 @@ class WordDetectionConfig:
     debug_detection: bool = False
     # Frame length in milliseconds
     frame_length_ms: int = 512
-    #model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_raspberry-pi_v3_0_0.ppn")
-    model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
+    # Use platform-specific model path
+    model_path = os.path.join(
+        os.path.dirname(__file__), 
+        "assets",
+        "Hey-Chat_en_mac_v3_0_0.ppn" if platform.system().lower() == 'darwin' else "Hey-Chat_en_raspberry-pi_v3_0_0.ppn"
+    )
+
 
 @dataclass
 class AppConfig:

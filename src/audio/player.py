@@ -1,6 +1,9 @@
 import os
 import platform
 import subprocess
+import sys
+import threading
+import logging
 from typing import Optional, Callable, Union
 import pyaudio
 from ..utils.types import AudioPlayer
@@ -36,9 +39,17 @@ class SystemAudioPlayer(AudioPlayer):
             # Determine the appropriate command based on OS
             system = platform.system().lower()
             if system == "darwin":  # macOS
-                cmd = ["afplay"]
-                if volume is not None:
-                    cmd.extend(["-v", str(volume)])
+                if isinstance(audio_data, str):
+                    cmd = ['afplay', audio_data]
+                    if volume is not None and volume != 1.0:
+                        cmd.extend(['-v', str(volume)])
+                else:
+                    # Save bytes to temp file
+                    with open("temp_response.mp3", "wb") as f:
+                        f.write(audio_data)
+                    cmd = ['afplay', "temp_response.mp3"]
+                    if volume is not None and volume != 1.0:
+                        cmd.extend(['-v', str(volume)])
             elif system == "linux":
                 # Try mpg123 first, fall back to aplay
                 if self._command_exists("mpg123"):
@@ -50,20 +61,18 @@ class SystemAudioPlayer(AudioPlayer):
                     cmd = ["aplay"]
                 else:
                     raise AudioPlayerError("No suitable audio player found. Please install mpg123 or aplay.")
+                if isinstance(audio_data, str):
+                    if not os.path.exists(audio_data):
+                        raise AudioPlayerError(f"Audio file not found: {audio_data}")
+                    cmd.append(audio_data)
+                else:
+                    # Save bytes to temp file
+                    with open("temp_response.mp3", "wb") as f:
+                        f.write(audio_data)
+                    cmd.append("temp_response.mp3")
             else:
                 raise AudioPlayerError(f"Unsupported operating system: {system}")
             
-            # Handle file path or bytes
-            if isinstance(audio_data, str):
-                if not os.path.exists(audio_data):
-                    raise AudioPlayerError(f"Audio file not found: {audio_data}")
-                cmd.append(audio_data)
-            else:
-                # Save bytes to temp file
-                with open("temp_response.mp3", "wb") as f:
-                    f.write(audio_data)
-                cmd.append("temp_response.mp3")
-
             # Start playback with PIPE to prevent blocking
             self._current_process = subprocess.Popen(
                 cmd, 
