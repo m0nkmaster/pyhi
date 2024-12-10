@@ -25,10 +25,13 @@ class PyAudioRecorder:
         
         # Find the Jabra device if available
         self.input_device_index = None
+        print("\nAvailable audio devices:")
         for i in range(self.audio.get_device_count()):
             device_info = self.audio.get_device_info_by_index(i)
+            print(f"Device {i}: {device_info['name']} (inputs: {device_info['maxInputChannels']}, outputs: {device_info['maxOutputChannels']})")
             if 'Jabra' in device_info['name']:
                 self.input_device_index = i
+                print(f"Selected Jabra device: {device_info['name']}")
                 break
         
         # Calculate chunks per second more precisely
@@ -63,8 +66,12 @@ class PyAudioRecorder:
 
     def record_speech(self) -> Optional[bytes]:
         """Record speech until silence is detected."""
-        if self.stream is None:
+        if self.stream is None or not self.stream.is_active():
             try:
+                if self.stream:
+                    self.stream.stop_stream()
+                    self.stream.close()
+                
                 self.stream = self.audio.open(
                     format=self.config.format,
                     channels=self.config.channels,
@@ -72,10 +79,8 @@ class PyAudioRecorder:
                     input=True,
                     frames_per_buffer=self.config.chunk_size,
                     input_device_index=self.input_device_index,
-                    start=False  # Don't start the stream yet
+                    start=True  # Start stream immediately
                 )
-                # Start the stream explicitly
-                self.stream.start_stream()
             except Exception as e:
                 raise AudioRecorderError(f"Error opening audio stream: {e}")
         
@@ -84,30 +89,38 @@ class PyAudioRecorder:
             silence_chunks = 0
             speech_detected = False
             
-            # Use a lower initial silence threshold for USB mics
-            silence_threshold = 300  # Lower baseline for USB mics
+            # Calibrate silence threshold from ambient noise
+            ambient_levels = []
+            for _ in range(5):  # Sample ambient noise for 5 chunks
+                data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
+                if data:
+                    audio_data = np.frombuffer(data, dtype=np.int16)
+                    ambient_levels.append(np.abs(audio_data).mean())
             
-            # Calculate silence chunks based on config
+            # Set threshold to 2x the average ambient level
+            silence_threshold = max(300, np.mean(ambient_levels) * 2 if ambient_levels else 300)
+            
+            # Calculate timing parameters
             chunks_per_second = self.config.sample_rate / self.config.chunk_size
             max_silence_chunks = round(chunks_per_second * self.recorder_config.response_silence_threshold)
+            max_wait_chunks = round(chunks_per_second * 2)  # Wait up to 2 seconds for speech to start
             
             # First wait for speech to begin
-            max_wait_chunks = round(chunks_per_second * 1)  # Wait up to 1 second for speech to start
             for _ in range(max_wait_chunks):
                 try:
                     data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
                     if not data:
                         continue
-                        
+                    
                     audio_data = np.frombuffer(data, dtype=np.int16)
                     current_volume = np.abs(audio_data).mean()
                     
                     if current_volume > silence_threshold:
+                        frames.extend([d for d in self.audio_buffer])  # Add buffer content
                         frames.append(data)
                         speech_detected = True
                         break
                 except IOError as e:
-                    # Handle ALSA buffer overrun
                     if "Input overflowed" in str(e):
                         continue
                     raise
