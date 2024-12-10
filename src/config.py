@@ -28,7 +28,7 @@ def get_sound_path(filename: str) -> str:
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.5
-    response_silence_threshold: float = 3.0  # Increased from default
+    response_silence_threshold: float = 1.0  # Increased from default
     buffer_duration: float = 1.0
 
 
