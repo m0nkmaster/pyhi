@@ -23,9 +23,9 @@ class PyAudioRecorder:
         self.stream = None
         self.recognizer = sr.Recognizer()
         
-        # Initialize rolling buffer (2 seconds of audio)
-        self.chunks_per_second = int(self.config.sample_rate / self.config.chunk_size)
-        buffer_chunks = self.chunks_per_second * 2  # 2 seconds buffer
+        # Calculate chunks per second more precisely
+        self.chunks_per_second = self.config.sample_rate / self.config.chunk_size
+        buffer_chunks = int(self.chunks_per_second * 2)  # 2 seconds buffer
         self.audio_buffer: Deque[bytes] = deque(maxlen=buffer_chunks)
 
     def clear_buffer(self):
@@ -69,10 +69,13 @@ class PyAudioRecorder:
             silence_chunks = 0
             speech_detected = False
             silence_threshold = 500  # Adjust this value based on your microphone
-            max_silence_chunks = int(self.chunks_per_second * self.recorder_config.response_silence_threshold)
             
-            # First wait for speech to begin
-            max_wait_chunks = int(self.chunks_per_second * 2)  # Wait up to 2 seconds for speech to start
+            # Calculate silence chunks more precisely
+            chunks_per_second = self.config.sample_rate / self.config.chunk_size
+            max_silence_chunks = round(chunks_per_second * self.recorder_config.response_silence_threshold)
+            
+            # First wait for speech to begin - reduced from 2s to 1s
+            max_wait_chunks = round(chunks_per_second * 1)  # Wait up to 1 second for speech to start
             for _ in range(max_wait_chunks):
                 data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
                 if not data:
