@@ -9,14 +9,12 @@ from ..config import WordDetectionConfig
 class PorcupineWakeWordDetector(WordDetector):
     def __init__(
         self,
-        keywords: List[str],
         config: Optional[WordDetectionConfig] = None,
         audio_config: Optional[AudioConfig] = None
     ):
         """Initialize the Porcupine-based wake word detector."""
         self.audio_config = audio_config or AudioConfig()
         self.config = config or WordDetectionConfig()
-        self.keywords = keywords
         
         # Get access key from environment
         access_key = os.getenv("PICOVOICE_API_KEY")
@@ -24,12 +22,18 @@ class PorcupineWakeWordDetector(WordDetector):
             raise ValueError("PICOVOICE_API_KEY environment variable not set")
         
         try:
-            # Initialize Porcupine with model file paths
+            # Get the absolute path to the model file
+            model_path = self.config.model_path
+            
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(f"Model file not found at {model_path}")
+            
+            # Initialize Porcupine with model file path
             self.porcupine = pvporcupine.create(
                 access_key=access_key,
-                keyword_paths=keywords  # Each keyword should be a path to a .ppn file
+                keyword_paths=[model_path]  # Pass as a list with the absolute path
             )
-            logging.info(f"Initialized Porcupine with wake word models: {keywords}")
+            logging.info(f"Initialized Porcupine with wake word model: {model_path}")
             
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Porcupine: {str(e)}")
