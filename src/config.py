@@ -14,8 +14,8 @@ if not os.getenv("OPENAI_API_KEY"):
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.5
-    response_silence_threshold: float = 2.0
-    buffer_duration: float = 1.5
+    response_silence_threshold: float = 1.0
+    buffer_duration: float = 1.0
 
 
 @dataclass
@@ -62,18 +62,19 @@ class SpeechDetectionConfig:
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 48000
+    sample_rate: int = 16000  # Required by Porcupine
     channels: int = 1
-    chunk_size: int = 512
-    format: int = pyaudio.paInt16
+    chunk_size: int = 512     # Match Porcupine's frame length
+    format: int = pyaudio.paInt16  # 16-bit linear PCM
     input_device_index: int | None = None
     output_device_index: int | None = None
     device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
     speech_config: SpeechDetectionConfig = field(default_factory=SpeechDetectionConfig)
-
+    
     def __post_init__(self):
-        if self.chunk_size == 512:
-            self.chunk_size = int(self.sample_rate * (self.device_config.buffer_size_ms / 1000))
+        # Ensure chunk size matches Porcupine's frame length
+        if self.chunk_size != 512:
+            print("Warning: chunk_size should be 512 for Porcupine wake word detection")
 
 
 @dataclass
@@ -86,10 +87,10 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-4-turbo"
+    model: str = "gpt-3.5-turbo"
     max_completion_tokens: int = 250
     temperature: float = 0.7
-    system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
+    system_prompt: str = "You are a voice assistant in a lively household. Keep your responses concise, clear, and under 2 sentences when possible. Be direct and helpful."
 
 
 @dataclass
@@ -100,11 +101,10 @@ class TTSConfig:
 
 @dataclass
 class WordDetectionConfig:
-    model: str = "whisper-1"
-    temperature: float = 0.0
-    language: str = "en"
-    min_audio_size: int = 4096
-    similarity_threshold: float = 0.75
+    # Debug options
+    debug_detection: bool = False
+    # Frame length in milliseconds
+    frame_length_ms: int = 512
 
 
 @dataclass
@@ -117,12 +117,6 @@ class AppConfig:
     def __post_init__(self):
         if self.words is None:
             self.words = [
-                "hey chat", "hi chat", "hello chat",
-                "hey chatbot", "hi chatbot", "hello chatbot",
-                "chat", "chats", "hey chap", "hey chaps",
-                "hey Chad", "hi Chad", "hello Chad",
-                "hey Jack", "hey check", "hey chap",
-                "hey shot", "hay chat", "hey chair",
-                "hey that", "he chat", "hey chatty",
-                "hey chat bot", "hey chat!"
+                "computer",  # Star Trek style!
+                "jarvis"     # Iron Man style!
             ]
