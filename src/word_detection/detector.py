@@ -23,27 +23,13 @@ class PorcupineWakeWordDetector(WordDetector):
         if not access_key:
             raise ValueError("PICOVOICE_API_KEY environment variable not set")
         
-        # Validate keywords against available built-in keywords
-        available_keywords = list(pvporcupine.KEYWORDS)
-        logging.info(f"Available Porcupine keywords: {available_keywords}")
-        logging.info(f"Requested keywords: {keywords}")
-        
-        valid_keywords = [k for k in keywords if k in available_keywords]
-        logging.info(f"Valid keywords after filtering: {valid_keywords}")
-        
-        if not valid_keywords:
-            raise ValueError(
-                f"None of the provided keywords {keywords} are available. "
-                f"Available keywords are: {available_keywords}"
-            )
-        
         try:
-            # Initialize Porcupine with built-in keywords
+            # Initialize Porcupine with model file paths
             self.porcupine = pvporcupine.create(
                 access_key=access_key,
-                keywords=valid_keywords
+                keyword_paths=keywords  # Each keyword should be a path to a .ppn file
             )
-            logging.info(f"Initialized Porcupine with keywords: {valid_keywords}")
+            logging.info(f"Initialized Porcupine with wake word models: {keywords}")
             
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Porcupine: {str(e)}")

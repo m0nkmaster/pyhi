@@ -13,7 +13,7 @@ if not os.getenv("OPENAI_API_KEY"):
 
 # Audio file paths relative to src/assets
 ACTIVATION_SOUND = "bing.mp3"
-CONFIRMATION_SOUND = "yes.mp3"
+CONFIRMATION_SOUND = "elevator.mp3"  
 READY_SOUND = "beep.mp3"
 SLEEP_SOUND = "bing-bong.mp3"  # Reusing activation sound for now
 
@@ -28,7 +28,7 @@ def get_sound_path(filename: str) -> str:
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.5
-    response_silence_threshold: float = 2.5
+    response_silence_threshold: float = 3.0  # Increased from default
     buffer_duration: float = 1.0
 
 
@@ -130,7 +130,6 @@ class AppConfig:
 
     def __post_init__(self):
         if self.words is None:
-            self.words = [
-                "computer",  # Star Trek style!
-                "jarvis"     # Iron Man style!
-            ]
+            # Use the Hey Chat wake word model for Mac
+            model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
+            self.words = [model_path]
