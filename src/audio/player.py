@@ -33,10 +33,25 @@ class SystemAudioPlayer(AudioPlayer):
         self.stop()
 
         try:
-            # Prepare the command
-            cmd = ["afplay"]
-            if volume is not None:
-                cmd.extend(["-v", str(volume)])
+            # Determine the appropriate command based on OS
+            system = platform.system().lower()
+            if system == "darwin":  # macOS
+                cmd = ["afplay"]
+                if volume is not None:
+                    cmd.extend(["-v", str(volume)])
+            elif system == "linux":
+                # Try mpg123 first, fall back to aplay
+                if self._command_exists("mpg123"):
+                    cmd = ["mpg123"]
+                    if volume is not None:
+                        vol = int(volume * 100)
+                        cmd.extend(["-f", str(vol)])
+                elif self._command_exists("aplay"):
+                    cmd = ["aplay"]
+                else:
+                    raise AudioPlayerError("No suitable audio player found. Please install mpg123 or aplay.")
+            else:
+                raise AudioPlayerError(f"Unsupported operating system: {system}")
             
             # Handle file path or bytes
             if isinstance(audio_data, str):
@@ -77,3 +92,11 @@ class SystemAudioPlayer(AudioPlayer):
     def is_playing(self) -> bool:
         """Check if audio is currently playing."""
         return self._playing
+
+    def _command_exists(self, cmd: str) -> bool:
+        """Check if a command exists in the system PATH."""
+        try:
+            subprocess.run(["which", cmd], capture_output=True, check=True)
+            return True
+        except subprocess.CalledProcessError:
+            return False
