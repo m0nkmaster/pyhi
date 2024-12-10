@@ -120,7 +120,7 @@ class WordDetectionConfig:
     # Frame length in milliseconds
     frame_length_ms: int = 512
     model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_raspberry-pi_v3_0_0.ppn")
-    # model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
+    #model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
 
 @dataclass
 class AppConfig:
