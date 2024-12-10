@@ -28,7 +28,12 @@ from .config import (
     AppConfig,
     AudioPlayerConfig,
     WordDetectionConfig,
-    AudioDeviceConfig
+    AudioDeviceConfig,
+    ACTIVATION_SOUND,
+    CONFIRMATION_SOUND,
+    READY_SOUND,
+    SLEEP_SOUND,
+    get_sound_path,
 )
 
 def print_with_emoji(message: str, emoji: str):
@@ -39,11 +44,18 @@ class VoiceAssistant:
         """Initialize the voice assistant."""
         logging.info("Initializing VoiceAssistant...")
         print_with_emoji("Initializing VoiceAssistant...", "🤖")
+        
+        # Warn about speech recognition limitations
+        print_with_emoji("Note: Using free Google Speech Recognition API (limited to ~50 requests/day)", "ℹ️")
+        logging.warning("Using free Google Speech Recognition API with daily request limits")
+        
         self.initialize_configurations(words, timeout_seconds)
         self.initialize_openai_client()
         self.setup_audio_system()
         self.load_activation_sound()
         self.load_confirmation_sound()
+        self.load_ready_sound()
+        self.load_sleep_sound()
         
         # Initialize state
         self.is_awake = False
@@ -152,27 +164,39 @@ class VoiceAssistant:
 
     def load_activation_sound(self):
         """Load the activation sound file."""
-        self.activation_sound_path = os.path.join(
-            os.path.dirname(__file__), 
-            'assets', 
-            'bing.mp3'
-        )
+        self.activation_sound_path = get_sound_path(ACTIVATION_SOUND)
         if not os.path.exists(self.activation_sound_path):
             logging.warning(f"Activation sound file not found at {self.activation_sound_path}")
+            print_with_emoji(f"Warning: Activation sound file not found at {self.activation_sound_path}", "⚠️")
+        else:
+            logging.info(f"Loaded activation sound from {self.activation_sound_path}")
 
     def load_confirmation_sound(self):
         """Load the confirmation sound file."""
-        self.confirmation_sound_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),  # Go up one more directory to reach project root
-            'src',
-            'assets', 
-            'yes.mp3'
-        )
+        self.confirmation_sound_path = get_sound_path(CONFIRMATION_SOUND)
         if not os.path.exists(self.confirmation_sound_path):
             logging.warning(f"Confirmation sound file not found at {self.confirmation_sound_path}")
             print_with_emoji(f"Warning: Confirmation sound file not found at {self.confirmation_sound_path}", "⚠️")
         else:
             logging.info(f"Loaded confirmation sound from {self.confirmation_sound_path}")
+
+    def load_ready_sound(self):
+        """Load the ready sound file."""
+        self.ready_sound_path = get_sound_path(READY_SOUND)
+        if not os.path.exists(self.ready_sound_path):
+            logging.warning(f"Ready sound file not found at {self.ready_sound_path}")
+            print_with_emoji(f"Warning: Ready sound file not found at {self.ready_sound_path}", "⚠️")
+        else:
+            logging.info(f"Loaded ready sound from {self.ready_sound_path}")
+
+    def load_sleep_sound(self):
+        """Load the sleep mode sound file."""
+        self.sleep_sound_path = get_sound_path(SLEEP_SOUND)
+        if not os.path.exists(self.sleep_sound_path):
+            logging.warning(f"Sleep sound file not found at {self.sleep_sound_path}")
+            print_with_emoji(f"Warning: Sleep sound file not found at {self.sleep_sound_path}", "⚠️")
+        else:
+            logging.info(f"Loaded sleep sound from {self.sleep_sound_path}")
 
     def run(self):
         """Run the voice assistant main loop."""
@@ -186,6 +210,11 @@ class VoiceAssistant:
                 # Check for timeout when awake
                 if self.is_awake:
                     if self._check_timeout():
+                        # Play sleep sound before going to sleep
+                        if self.sleep_sound_path and os.path.exists(self.sleep_sound_path):
+                            logging.info("Playing sleep sound...")
+                            self.audio_player.play(self.sleep_sound_path, volume=1.0)
+                        
                         logging.info("Going back to sleep. Say a trigger word to start a new conversation.")
                         print_with_emoji("Going back to sleep. Say a trigger word to start a new conversation.", "😴")
                         self.is_awake = False
@@ -207,7 +236,6 @@ class VoiceAssistant:
                 print_with_emoji("Recording user input...", "🎤")
                 transcript = self._record_user_input()
                 if not transcript:  # No speech detected
-                    logging.info("No speech detected in recording")
                     continue
                 
                 # Get assistant response
@@ -229,6 +257,13 @@ class VoiceAssistant:
                             logging.info("Playing response...")
                             self.audio_player.play(audio_data)
                             logging.info("Response playback complete")
+                            
+                            # Play ready sound to indicate we're listening again
+                            if self.ready_sound_path and os.path.exists(self.ready_sound_path):
+                                logging.info("Playing ready sound...")
+                                self.audio_player.play(self.ready_sound_path, volume=1.0)
+                                print_with_emoji("Ready for your next question!", "👂")
+                            
                         except AudioPlayerError as e:
                             logging.error(f"Error playing response: {e}")
                     
@@ -276,25 +311,9 @@ class VoiceAssistant:
         # Clear any previous audio buffer
         self.audio_recorder.clear_buffer()
         
-        # Small delay to let user start speaking
-        time.sleep(0.1)
-        
         audio_data = self.audio_recorder.record_speech()
         if not audio_data:  # No speech detected
-            logging.info("No speech detected in recording")
             return None
-
-        # Play confirmation sound
-        try:
-            if self.confirmation_sound_path and os.path.exists(self.confirmation_sound_path):
-                logging.info(f"Playing confirmation sound from {self.confirmation_sound_path}")
-                print_with_emoji("Processing your question...", "⚙️")
-                self.audio_player.play(self.confirmation_sound_path, volume=1.0)  # Set max volume
-                time.sleep(0.2)  # Small delay after sound
-            else:
-                logging.error(f"Confirmation sound file not found at {self.confirmation_sound_path}")
-        except AudioPlayerError as e:
-            logging.error(f"Failed to play confirmation sound: {e}")
         
         # Save audio with consistent format
         with wave.open("recording.wav", "wb") as wf:
@@ -308,14 +327,31 @@ class VoiceAssistant:
         try:
             with sr.AudioFile("recording.wav") as source:
                 audio = self.recognizer.record(source)
-                transcript = self.recognizer.recognize_google(audio)
-                logging.info(f"You said: {transcript}")
-                return transcript
-        except sr.UnknownValueError:
-            logging.info("Could not understand audio")
-            return None
-        except sr.RequestError as e:
-            logging.error(f"Could not request results; {e}")
+                try:
+                    transcript = self.recognizer.recognize_google(audio)
+                    logging.info(f"You said: {transcript}")
+                    
+                    # Only play confirmation sound if we got valid speech
+                    if self.confirmation_sound_path and os.path.exists(self.confirmation_sound_path):
+                        logging.info(f"Playing confirmation sound from {self.confirmation_sound_path}")
+                        print_with_emoji("Processing your question...", "⚙️")
+                        self.audio_player.play(self.confirmation_sound_path, volume=1.0)
+                    
+                    return transcript
+                except sr.UnknownValueError:
+                    logging.info("Could not understand audio")
+                    print_with_emoji("Sorry, I couldn't understand that. Could you try again?", "🤔")
+                    return None
+                except sr.RequestError as e:
+                    if "recognition request failed" in str(e):
+                        logging.error("Daily limit for free Google Speech Recognition may have been reached")
+                        print_with_emoji("Speech recognition limit reached. Consider upgrading to Google Cloud Speech API", "⚠️")
+                    else:
+                        logging.error(f"Could not request results; {e}")
+                        print_with_emoji("Speech recognition error. Please try again.", "❌")
+                    return None
+        except Exception as e:
+            logging.error(f"Error processing audio: {e}")
             return None
 
     def _check_timeout(self) -> bool:

@@ -11,6 +11,20 @@ if not os.getenv("OPENAI_API_KEY"):
     raise ValueError("OPENAI_API_KEY not found in environment variables. Please check your .env file.")
 
 
+# Audio file paths relative to src/assets
+ACTIVATION_SOUND = "bing.mp3"
+CONFIRMATION_SOUND = "yes.mp3"
+READY_SOUND = "beep.mp3"
+SLEEP_SOUND = "bing-bong.mp3"  # Reusing activation sound for now
+
+# Base directory for audio assets
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+
+def get_sound_path(filename: str) -> str:
+    """Get the absolute path for a sound file in the assets directory."""
+    return os.path.join(ASSETS_DIR, filename)
+
+
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.5
