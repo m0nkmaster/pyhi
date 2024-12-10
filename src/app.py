@@ -102,7 +102,6 @@ class VoiceAssistant:
         # Initialize wake word detector with Porcupine
         try:
             self.word_detector = PorcupineWakeWordDetector(
-                keywords=self.app_config.words,
                 config=WordDetectionConfig(),
                 audio_config=self.audio_config
             )
@@ -206,7 +205,6 @@ class VoiceAssistant:
         """Run the voice assistant main loop."""
         logging.info("Voice Assistant is ready! Say one of the trigger words to begin...")
         print_with_emoji("Voice Assistant is ready! Say one of the trigger words to begin...", "🚀")
-        logging.info(f"Detection words: {', '.join(self.word_detector.keywords)}")
         logging.info("Press Ctrl+C to quit")
         
         try:
