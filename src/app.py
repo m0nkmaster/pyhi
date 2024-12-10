@@ -43,6 +43,7 @@ class VoiceAssistant:
         self.initialize_openai_client()
         self.setup_audio_system()
         self.load_activation_sound()
+        self.load_confirmation_sound()
         
         # Initialize state
         self.is_awake = False
@@ -159,6 +160,20 @@ class VoiceAssistant:
         if not os.path.exists(self.activation_sound_path):
             logging.warning(f"Activation sound file not found at {self.activation_sound_path}")
 
+    def load_confirmation_sound(self):
+        """Load the confirmation sound file."""
+        self.confirmation_sound_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),  # Go up one more directory to reach project root
+            'src',
+            'assets', 
+            'yes.mp3'
+        )
+        if not os.path.exists(self.confirmation_sound_path):
+            logging.warning(f"Confirmation sound file not found at {self.confirmation_sound_path}")
+            print_with_emoji(f"Warning: Confirmation sound file not found at {self.confirmation_sound_path}", "⚠️")
+        else:
+            logging.info(f"Loaded confirmation sound from {self.confirmation_sound_path}")
+
     def run(self):
         """Run the voice assistant main loop."""
         logging.info("Voice Assistant is ready! Say one of the trigger words to begin...")
@@ -269,6 +284,18 @@ class VoiceAssistant:
             logging.info("No speech detected in recording")
             return None
 
+        # Play confirmation sound
+        try:
+            if self.confirmation_sound_path and os.path.exists(self.confirmation_sound_path):
+                logging.info(f"Playing confirmation sound from {self.confirmation_sound_path}")
+                print_with_emoji("Processing your question...", "⚙️")
+                self.audio_player.play(self.confirmation_sound_path, volume=1.0)  # Set max volume
+                time.sleep(0.2)  # Small delay after sound
+            else:
+                logging.error(f"Confirmation sound file not found at {self.confirmation_sound_path}")
+        except AudioPlayerError as e:
+            logging.error(f"Failed to play confirmation sound: {e}")
+        
         # Save audio with consistent format
         with wave.open("recording.wav", "wb") as wf:
             wf.setnchannels(self.audio_config.channels)

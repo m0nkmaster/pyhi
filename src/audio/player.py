@@ -85,12 +85,12 @@ class SystemAudioPlayer(AudioPlayer):
         else:
             raise DeviceNotFoundError("No suitable output device found")
 
-    def play(self, audio_data: bytes, volume: float | None = None, device: str | None = None) -> None:
+    def play(self, audio_data: Union[bytes, str], volume: float | None = None, device: str | None = None) -> None:
         """
         Play audio data using the system's audio player.
         
         Args:
-            audio_data: Raw audio data in bytes
+            audio_data: Raw audio data in bytes or a path to an audio file
             volume: Optional volume level (0.0 to 1.0)
             device: Optional device name to play on
         """
@@ -118,13 +118,15 @@ class SystemAudioPlayer(AudioPlayer):
         
             while retries < (self.device_config.max_retries if self.device_config.retry_on_error else 1):
                 try:
-                    # Save audio data to a temporary file
-                    with open(self.config.temp_file, "wb") as f:
-                        f.write(audio_data)
-                        temp_file_created = True
-                
-                    # Play using system audio player
-                    self._play_audio_file(self.config.temp_file)
+                    if isinstance(audio_data, str):
+                        # If audio_data is a file path, play it directly
+                        self._play_audio_file(audio_data)
+                    else:
+                        # If audio_data is bytes, save to temp file first
+                        with open(self.config.temp_file, "wb") as f:
+                            f.write(audio_data)
+                            temp_file_created = True
+                        self._play_audio_file(self.config.temp_file)
                     return  # Success, exit the function
                 
                 except Exception as e:
