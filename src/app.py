@@ -7,6 +7,8 @@ from openai import OpenAI
 import wave
 import logging
 import speech_recognition as sr
+import threading
+import queue
 
 # Configure logging
 logging.basicConfig(
@@ -63,6 +65,8 @@ class VoiceAssistant:
         
         # Initialize speech recognizer
         self.recognizer = sr.Recognizer()
+        
+        self.response_queue = queue.Queue()
 
     def initialize_configurations(self, words: list[str], timeout_seconds: float | None):
         """Initialize configurations for the voice assistant."""
@@ -234,41 +238,104 @@ class VoiceAssistant:
                 # Process conversation when awake
                 logging.info("Recording user input...")
                 print_with_emoji("Recording user input...", "🎤")
-                transcript = self._record_user_input()
-                if not transcript:  # No speech detected
+                
+                # Clear any previous audio buffer
+                self.audio_recorder.clear_buffer()
+                
+                # Record audio without resetting timeout
+                audio_data = self.audio_recorder.record_speech()
+                if not audio_data:  # No speech detected
+                    # Check for timeout without resetting last_interaction
+                    if self._check_timeout():
+                        continue
                     continue
                 
-                # Get assistant response
-                logging.info("Getting assistant response...")
-                self.conversation_manager.add_user_message(transcript)
-                response = self.openai_wrapper.get_chat_completion(
-                    self.conversation_manager.get_conversation_history()
-                )
-                
-                if response:
-                    logging.info(f"Assistant: {response}")
-                    self.conversation_manager.add_assistant_message(response)
-                    
-                    # Convert response to speech and play it
-                    logging.info("Converting response to speech...")
-                    audio_data = self.openai_wrapper.text_to_speech(response)
-                    if audio_data:
+                # Save audio with consistent format
+                with wave.open("recording.wav", "wb") as wf:
+                    wf.setnchannels(self.audio_config.channels)
+                    wf.setsampwidth(2)  # 16-bit audio
+                    wf.setframerate(self.audio_config.sample_rate)
+                    wf.writeframes(audio_data)
+                logging.info("Audio recorded and saved")
+
+                # Convert speech to text using speech_recognition
+                try:
+                    with sr.AudioFile("recording.wav") as source:
+                        audio = self.recognizer.record(source)
                         try:
-                            logging.info("Playing response...")
-                            self.audio_player.play(audio_data)
-                            logging.info("Response playback complete")
+                            # Increase the recognition timeout and make it more strict
+                            transcript = self.recognizer.recognize_google(
+                                audio,
+                                show_all=False,  # Only return most confident result
+                            )
+                            if not transcript or len(transcript.strip()) == 0:
+                                logging.info("Empty transcript received")
+                                # Check for timeout without resetting last_interaction
+                                if self._check_timeout():
+                                    continue
+                                continue
+                                
+                            # Only reset the timeout counter when we get valid speech
+                            self.last_interaction = datetime.now()
+                            logging.info(f"You said: {transcript}")
                             
-                            # Play ready sound to indicate we're listening again
-                            if self.ready_sound_path and os.path.exists(self.ready_sound_path):
-                                logging.info("Playing ready sound...")
-                                self.audio_player.play(self.ready_sound_path, volume=1.0)
-                                print_with_emoji("Ready for your next question!", "👂")
+                            # Add message to conversation history immediately
+                            self.conversation_manager.add_user_message(transcript)
+
+                            # Start playing confirmation sound non-blocking while waiting for API
+                            if self.confirmation_sound_path and os.path.exists(self.confirmation_sound_path):
+                                print(f"[{datetime.now()}] Starting confirmation sound...")
+                                self.audio_player.play(self.confirmation_sound_path, volume=1.0, block=False)
+                                print(f"[{datetime.now()}] Confirmation sound started")
+
+                            # Start API call immediately
+                            print(f"[{datetime.now()}] Starting API call...")
+                            logging.info("Getting assistant response...")
                             
-                        except AudioPlayerError as e:
-                            logging.error(f"Error playing response: {e}")
-                    
-                    self.last_interaction = datetime.now()
-        
+                            # Make the API call
+                            response = self.openai_wrapper.get_chat_completion(
+                                self.conversation_manager.get_conversation_history()
+                            )
+                            print(f"[{datetime.now()}] Got API response")
+                            
+                            # Convert response to speech and play it
+                            logging.info("Converting response to speech...")
+                            audio_data = self.openai_wrapper.text_to_speech(response)
+                            if audio_data:
+                                try:
+                                    logging.info("Playing response...")
+                                    self.audio_player.play(audio_data, block=True)  # Block for TTS
+                                    logging.info("Response playback complete")
+                                    
+                                    # Stop the confirmation sound as soon as we get the response
+                                    print(f"[{datetime.now()}] Stopping confirmation sound...")
+                                    self.audio_player.stop()
+                                    print(f"[{datetime.now()}] Confirmation sound stopped")
+                                    
+                                    # Play ready sound after TTS finishes
+                                    if self.ready_sound_path and os.path.exists(self.ready_sound_path):
+                                        print(f"[{datetime.now()}] Playing ready sound...")
+                                        self.audio_player.play(self.ready_sound_path, volume=1.0, block=True)
+                                        print(f"[{datetime.now()}] Ready sound complete")
+                                        print_with_emoji("Ready for your next question!", "👂")
+                                        
+                                    # Only update last interaction after all sounds are complete
+                                    self.last_interaction = datetime.now()
+                                    
+                                except AudioPlayerError as e:
+                                    logging.error(f"Error playing response: {e}")
+                        except sr.UnknownValueError:
+                            logging.info("Could not understand audio")
+                            print_with_emoji("Sorry, I couldn't understand that. Could you try again?", "🤔")
+                        except sr.RequestError as e:
+                            if "recognition request failed" in str(e):
+                                logging.error("Daily limit for free Google Speech Recognition may have been reached")
+                                print_with_emoji("Speech recognition limit reached. Consider upgrading to Google Cloud Speech API", "⚠️")
+                            else:
+                                logging.error(f"Could not request results; {e}")
+                                print_with_emoji("Speech recognition error. Please try again.", "❌")
+                except Exception as e:
+                    logging.error(f"Error processing audio: {e}")
         except KeyboardInterrupt:
             logging.info("Shutting down...")
             print_with_emoji("Shutting down...", "🔌")
@@ -382,7 +449,8 @@ class VoiceAssistant:
 
 def main():
     """Main entry point."""
-    assistant = VoiceAssistant(["computer", "jarvis"])
+    config = AppConfig()
+    assistant = VoiceAssistant(config.words)
     assistant.run()
 
 if __name__ == "__main__":

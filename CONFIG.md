@@ -12,6 +12,27 @@ This document provides a detailed breakdown of all configuration options availab
   - Required for wake word detection using Porcupine
   - Must be set in `.env` file or environment
 
+## Wake Words
+
+PyHi uses Porcupine for wake word detection. To set up your wake words:
+
+1. Go to [Picovoice Console](https://console.picovoice.ai/ppn)
+2. Create your custom wake word or select a pre-built one
+3. Download the appropriate .ppn file for your platform (e.g., computer_mac.ppn)
+4. Place it in `src/assets/`
+5. Update `AppConfig.words` with the path to your .ppn file
+
+Example configuration:
+```python
+# In config.py
+self.words = [
+    os.path.join(os.path.dirname(__file__), "assets", "computer_mac.ppn"),
+    os.path.join(os.path.dirname(__file__), "assets", "hey_chat_mac.ppn")
+]
+```
+
+You can use multiple wake words by adding multiple .ppn files to the list.
+
 ## Sound Files
 Located in `src/assets/`:
 - `bing.mp3`: Played when wake word is detected
@@ -115,4 +136,3 @@ Controls text-to-speech settings.
 class TTSConfig:
     model: str = "tts-1"              # OpenAI TTS model
     voice: str = "nova"               # Voice selection
-```
