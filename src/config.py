@@ -28,8 +28,8 @@ def get_sound_path(filename: str) -> str:
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.5
-    response_silence_threshold: float = 1.0  # Shorter for better responsiveness
-    buffer_duration: float = 0.5  # Reduced buffer for less latency
+    response_silence_threshold: float = 2.0
+    buffer_duration: float = 1.0
 
 
 @dataclass
@@ -76,11 +76,10 @@ class SpeechDetectionConfig:
 
 @dataclass
 class AudioConfig:
-    # ALSA-friendly configuration
-    channels: int = 1  # Mono for better speech recognition
-    sample_rate: int = 16000  # Standard for speech recognition
-    chunk_size: int = 512  # Smaller chunks for better latency
-    format: int = pyaudio.paInt16  # 16-bit audio
+    sample_rate: int = 16000  # Required by Porcupine
+    channels: int = 1
+    chunk_size: int = 1024     # Match Porcupine's frame length
+    format: int = pyaudio.paInt16  # 16-bit linear PCM
     input_device_index: int | None = None
     output_device_index: int | None = None
     device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
@@ -120,8 +119,8 @@ class WordDetectionConfig:
     debug_detection: bool = False
     # Frame length in milliseconds
     frame_length_ms: int = 512
-    model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_raspberry-pi_v3_0_0.ppn")
-    #model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
+    #model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_raspberry-pi_v3_0_0.ppn")
+    model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
 
 @dataclass
 class AppConfig:
