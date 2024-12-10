@@ -3,7 +3,6 @@ from datetime import datetime
 import time
 from typing import Optional
 import pyaudio
-from openai import OpenAI
 import wave
 import logging
 import speech_recognition as sr
@@ -12,27 +11,24 @@ import queue
 import signal
 import sys
 
-# Configure logging
-logging.basicConfig(
-    filename='voice_assistant.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+from openai import OpenAI
 
-from .audio.recorder import PyAudioRecorder
-from .audio.player import SystemAudioPlayer, AudioPlayerError
+from .config import (
+    AppConfig,
+    AudioConfig,
+    AudioPlayerConfig,
+    AudioRecorderConfig,
+    ChatConfig,
+    TTSConfig,
+    WordDetectionConfig,
+    AudioDeviceConfig,
+)
+from .audio.player import PyAudioPlayer, AudioPlayerError
+from .audio.recorder import PyAudioRecorder, AudioRecorderError
 from .word_detection.detector import PorcupineWakeWordDetector
 from .conversation.manager import ChatConversationManager
 from .conversation.openai_client import OpenAIWrapper
 from .config import (
-    AudioConfig,
-    AudioRecorderConfig,
-    ChatConfig,
-    TTSConfig,
-    AppConfig,
-    AudioPlayerConfig,
-    WordDetectionConfig,
-    AudioDeviceConfig,
     ACTIVATION_SOUND,
     CONFIRMATION_SOUND,
     READY_SOUND,
@@ -145,7 +141,7 @@ class VoiceAssistant:
         print()  # Add a blank line for better readability
 
         # Initialize audio player with list_devices_on_start=False since we'll list devices ourselves
-        self.audio_player = SystemAudioPlayer(
+        self.audio_player = PyAudioPlayer(
             on_error=lambda e: logging.error(f"Audio playback error: {e}"),
             config=self.audio_player_config,
             device_config=AudioDeviceConfig(list_devices_on_start=False)
