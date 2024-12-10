@@ -6,6 +6,7 @@ import pyaudio
 from openai import OpenAI
 import wave
 import logging
+import speech_recognition as sr
 
 # Configure logging
 logging.basicConfig(
@@ -14,10 +15,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-from .audio.analyzer import is_speech
 from .audio.recorder import PyAudioRecorder
 from .audio.player import SystemAudioPlayer, AudioPlayerError
-from .word_detection.detector import WhisperWordDetector
+from .word_detection.detector import PorcupineWakeWordDetector
 from .conversation.manager import ChatConversationManager
 from .conversation.openai_client import OpenAIWrapper
 from .config import (
@@ -27,7 +27,8 @@ from .config import (
     TTSConfig,
     AppConfig,
     AudioPlayerConfig,
-    WordDetectionConfig
+    WordDetectionConfig,
+    AudioDeviceConfig
 )
 
 def print_with_emoji(message: str, emoji: str):
@@ -46,6 +47,9 @@ class VoiceAssistant:
         # Initialize state
         self.is_awake = False
         self.last_interaction: Optional[datetime] = None
+        
+        # Initialize speech recognizer
+        self.recognizer = sr.Recognizer()
 
     def initialize_configurations(self, words: list[str], timeout_seconds: float | None):
         """Initialize configurations for the voice assistant."""
@@ -59,7 +63,7 @@ class VoiceAssistant:
         self.audio_player_config = AudioPlayerConfig()
 
     def initialize_openai_client(self):
-        """Initialize OpenAI client and related components."""
+        """Initialize OpenAI client and components."""
         logging.info("Initializing OpenAI client...")
         print_with_emoji("Initializing OpenAI client...", "🔧")
         openai_client = OpenAI()
@@ -78,84 +82,88 @@ class VoiceAssistant:
             system_prompt=self.chat_config.system_prompt
         )
         
-        self.word_detector = WhisperWordDetector(
-            client=openai_client,
-            words=self.app_config.words,
-            config=WordDetectionConfig(),
-            audio_config=self.audio_config
-        )
+        # Initialize wake word detector with Porcupine
+        try:
+            self.word_detector = PorcupineWakeWordDetector(
+                keywords=self.app_config.words,
+                config=WordDetectionConfig(),
+                audio_config=self.audio_config
+            )
+            logging.info("Wake word detector initialized successfully!")
+            print_with_emoji("Wake word detector initialized successfully!", "✅")
+        except ValueError as e:
+            logging.error(f"Error initializing wake word detector: {e}")
+            print_with_emoji(f"Error initializing wake word detector: {e}", "❌")
+            raise
 
     def setup_audio_system(self):
-        """Setup the audio system for playback and recording."""
-        logging.info("Setting up audio system...")
+        """Set up the audio system."""
         print_with_emoji("Setting up audio system...", "🔊")
-        
-        # Initialize audio player
+        logging.info("Setting up audio system...")
+
+        # Initialize PyAudio
+        audio = pyaudio.PyAudio()
+
+        # Get default devices
+        default_input = audio.get_default_input_device_info()['index']
+        default_output = audio.get_default_output_device_info()['index']
+
+        # Log available input devices
+        print("\n🎤 Available Audio Input Devices")
+        logging.info("Available Audio Input Devices:")
+        for i in range(audio.get_device_count()):
+            device_info = audio.get_device_info_by_index(i)
+            if device_info['maxInputChannels'] > 0:
+                # Add tick emoji if this is the default or selected device
+                is_selected = (i == default_input)
+                prefix = "✅ " if is_selected else "   "
+                print(f"{prefix}Index {i}: {device_info['name']}")
+                logging.info(f"Input Device - Index {i}: {device_info['name']}{' (Selected)' if is_selected else ''}")
+
+        print()  # Add a blank line for better readability
+
+        # Initialize audio player with list_devices_on_start=False since we'll list devices ourselves
         self.audio_player = SystemAudioPlayer(
             on_error=lambda e: logging.error(f"Audio playback error: {e}"),
-            config=self.audio_player_config
+            config=self.audio_player_config,
+            device_config=AudioDeviceConfig(list_devices_on_start=False)
         )
-        
-        # Get and log output device info
-        if self.audio_player_config.output_device_index is not None:
-            try:
-                pa = pyaudio.PyAudio()
-                dev_info = pa.get_device_info_by_index(self.audio_player_config.output_device_index)
-                print_with_emoji(f"Using output device: {dev_info.get('name', 'Unknown')}", "🔈")
-                pa.terminate()
-            except Exception as e:
-                logging.warning(f"Could not get output device info: {e}")
-        
+
+        # Log available output devices
+        print("🔊 Available Audio Output Devices")
+        logging.info("Available Audio Output Devices:")
+        for i in range(audio.get_device_count()):
+            device_info = audio.get_device_info_by_index(i)
+            if device_info['maxOutputChannels'] > 0:
+                # Add tick emoji if this is the default or selected device
+                is_selected = (i == default_output or i == self.audio_player.config.output_device_index)
+                prefix = "✅ " if is_selected else "   "
+                print(f"{prefix}Index {i}: {device_info['name']}")
+                logging.info(f"Output Device - Index {i}: {device_info['name']}{' (Selected)' if is_selected else ''}")
+
+        print()  # Add a blank line for better readability
+
         # Initialize audio recorder
         self.audio_recorder = PyAudioRecorder(
             config=self.audio_config,
-            analyzer=self,
-            on_error=lambda e: logging.error(f"Recording error: {e}"),
             recorder_config=AudioRecorderConfig()
         )
-        
-        # Get and log input device info
-        if self.audio_config.input_device_index is not None:
-            try:
-                pa = pyaudio.PyAudio()
-                dev_info = pa.get_device_info_by_index(self.audio_config.input_device_index)
-                print_with_emoji(f"Using input device: {dev_info.get('name', 'Unknown')}", "🎤")
-                pa.terminate()
-            except Exception as e:
-                logging.warning(f"Could not get input device info: {e}")
 
     def load_activation_sound(self):
-        """Load the activation sound for the voice assistant."""
-        logging.info("Loading activation sound...")
-        print_with_emoji("Loading activation sound...", "🎵")
-        try:
-            with open(self.audio_player_config.activation_sound_path, "rb") as f:
-                self.activation_sound = f.read()
-            logging.info("Activation sound loaded successfully!")
-            print_with_emoji("Activation sound loaded successfully!", "✅")
-        except FileNotFoundError:
-            logging.warning(f"{self.audio_player_config.activation_sound_path} not found. No activation sound will be played.")
-            print_with_emoji(f"{self.audio_player_config.activation_sound_path} not found. No activation sound will be played.", "⚠️")
-            self.activation_sound = None
-
-    def is_speech(self, audio_data: bytes, config: AudioConfig) -> bool:
-        """Implement AudioAnalyzer protocol."""
-        try:
-            result = is_speech(audio_data, config)
-            if result:
-                logging.info("Speech detected!")
-                print_with_emoji("Speech detected!", "🗣️")
-            return result
-        except Exception as e:
-            logging.error(f"Speech detection error: {e}")
-            print_with_emoji(f"Speech detection error: {e}", "❌")
-            return False
+        """Load the activation sound file."""
+        self.activation_sound_path = os.path.join(
+            os.path.dirname(__file__), 
+            'assets', 
+            'bing.mp3'
+        )
+        if not os.path.exists(self.activation_sound_path):
+            logging.warning(f"Activation sound file not found at {self.activation_sound_path}")
 
     def run(self):
         """Run the voice assistant main loop."""
         logging.info("Voice Assistant is ready! Say one of the trigger words to begin...")
         print_with_emoji("Voice Assistant is ready! Say one of the trigger words to begin...", "🚀")
-        logging.info(f"Detection words: {', '.join(self.word_detector.words)}")
+        logging.info(f"Detection words: {', '.join(self.word_detector.keywords)}")
         logging.info("Press Ctrl+C to quit")
         
         try:
@@ -172,8 +180,6 @@ class VoiceAssistant:
                 
                 if not self.is_awake:
                     # Listen for trigger word
-                    logging.info("Starting trigger word detection cycle...")
-                    print_with_emoji("Starting trigger word detection cycle...", "👂")
                     if self._listen_for_trigger_word():
                         self.is_awake = True
                         self.last_interaction = datetime.now()
@@ -184,18 +190,10 @@ class VoiceAssistant:
                 # Process conversation when awake
                 logging.info("Recording user input...")
                 print_with_emoji("Recording user input...", "🎤")
-                audio_data = self._record_user_input()
-                if not audio_data:  # No speech detected
+                transcript = self._record_user_input()
+                if not transcript:  # No speech detected
                     logging.info("No speech detected in recording")
                     continue
-                
-                logging.info("Transcribing audio...")
-                transcript = self.openai_wrapper.transcribe_audio("recording.wav")
-                if not transcript:
-                    logging.info("Failed to transcribe audio")
-                    continue
-                
-                logging.info(f"\nYou said: {transcript}")
                 
                 # Get assistant response
                 logging.info("Getting assistant response...")
@@ -229,53 +227,69 @@ class VoiceAssistant:
 
     def _listen_for_trigger_word(self) -> bool:
         """Listen for trigger word activation."""
-        logging.info("Listening for trigger word...")
-        print_with_emoji("Listening for trigger word...", "👂")
-        self.audio_recorder.start_recording()
-        audio_data = self.audio_recorder.stop_recording(is_wake_word_mode=True)
+        # Only log at debug level for continuous operations
+        logging.debug("Listening for trigger word...")
+        audio_data = self.audio_recorder.record_chunk()
         
         if not audio_data:
-            logging.info("No audio data recorded")
             return False
-        
-        # Save audio for trigger word detection
-        with open("recording.wav", "wb") as f:
-            f.write(audio_data)
         
         # Check for trigger word
         if self.word_detector.detect(audio_data):
             try:
                 logging.info("Trigger word detected! Playing activation sound...")
                 print_with_emoji("Trigger word detected! Playing activation sound...", "🎵")
-                self.audio_player.play(self.activation_sound)
+                if self.activation_sound_path:
+                    self.audio_player.play(self.activation_sound_path)
             except AudioPlayerError:
                 logging.error("Failed to play activation sound")
+            
+            # Give a small pause after the activation sound
+            time.sleep(0.2)
+            
             logging.info("Trigger word detected! How can I help you?")
             print_with_emoji("Trigger word detected! How can I help you?", "🤔")
             return True
         
         return False
 
-    def _record_user_input(self) -> Optional[bytes]:
+    def _record_user_input(self) -> Optional[str]:
         """Record user input with silence detection."""
         logging.info("Listening for your question...")
         print_with_emoji("Listening for your question...", "🎤")
         
-        self.audio_recorder.start_recording()
-        audio_data = self.audio_recorder.stop_recording(is_wake_word_mode=False)
+        # Clear any previous audio buffer
+        self.audio_recorder.clear_buffer()
         
-        if audio_data:
-            # Save audio with consistent format
-            with wave.open("recording.wav", "wb") as wf:
-                wf.setnchannels(self.audio_config.channels)
-                wf.setsampwidth(2)  # 16-bit audio
-                wf.setframerate(self.audio_config.sample_rate)
-                wf.writeframes(audio_data)
-            logging.info("Audio recorded and saved")
-        else:
-            logging.info("No audio recorded")
+        # Small delay to let user start speaking
+        time.sleep(0.1)
         
-        return audio_data
+        audio_data = self.audio_recorder.record_speech()
+        if not audio_data:  # No speech detected
+            logging.info("No speech detected in recording")
+            return None
+
+        # Save audio with consistent format
+        with wave.open("recording.wav", "wb") as wf:
+            wf.setnchannels(self.audio_config.channels)
+            wf.setsampwidth(2)  # 16-bit audio
+            wf.setframerate(self.audio_config.sample_rate)
+            wf.writeframes(audio_data)
+        logging.info("Audio recorded and saved")
+
+        # Convert speech to text using speech_recognition
+        try:
+            with sr.AudioFile("recording.wav") as source:
+                audio = self.recognizer.record(source)
+                transcript = self.recognizer.recognize_google(audio)
+                logging.info(f"You said: {transcript}")
+                return transcript
+        except sr.UnknownValueError:
+            logging.info("Could not understand audio")
+            return None
+        except sr.RequestError as e:
+            logging.error(f"Could not request results; {e}")
+            return None
 
     def _check_timeout(self) -> bool:
         """Check if the session should timeout."""
@@ -295,35 +309,18 @@ class VoiceAssistant:
     def _cleanup(self):
         """Clean up temporary files."""
         logging.info("Cleaning up temporary files...")
-        print_with_emoji("Cleaning up temporary files...", "🧹")
-        for file in ["recording.wav", "response.mp3"]:
-            if os.path.exists(file):
-                try:
-                    os.remove(file)
-                    logging.info(f"Removed {file}")
-                except Exception as e:
-                    logging.error(f"Failed to remove {file}: {e}")
+        try:
+            if os.path.exists(self.app_config.temp_recording_path):
+                os.remove(self.app_config.temp_recording_path)
+            if os.path.exists(self.app_config.temp_response_path):
+                os.remove(self.app_config.temp_response_path)
+        except Exception as e:
+            logging.error(f"Error cleaning up files: {e}")
 
 def main():
     """Main entry point."""
-    if not os.getenv("OPENAI_API_KEY"):
-        logging.error("Error: OPENAI_API_KEY not found in environment variables")
-        return 1
-    
-    try:
-        # Create AppConfig with default configuration
-        app_config = AppConfig()
-        
-        # Initialize assistant with config values
-        assistant = VoiceAssistant(
-            words=app_config.words,
-            timeout_seconds=app_config.timeout_seconds
-        )
-        assistant.run()
-        return 0
-    except Exception as e:
-        logging.error(f"Error: {e}")
-        return 1
+    assistant = VoiceAssistant(["computer", "jarvis"])
+    assistant.run()
 
 if __name__ == "__main__":
-    exit(main()) 
+    exit(main())
