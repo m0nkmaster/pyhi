@@ -131,5 +131,5 @@ class AppConfig:
     def __post_init__(self):
         if self.words is None:
             # Use the Hey Chat wake word model for Mac
-            model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
+            model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_raspberry-pi_v3_0_0.pnn")
             self.words = [model_path]

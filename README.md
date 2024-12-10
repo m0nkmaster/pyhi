@@ -62,6 +62,7 @@ brew install portaudio
 #### Linux (Ubuntu/Debian)
 ```bash
 sudo apt-get install python3-pyaudio portaudio19-dev
+source venv/bin/activate
 ```
 
 #### Windows
