@@ -28,8 +28,8 @@ def get_sound_path(filename: str) -> str:
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.5
-    response_silence_threshold: float = 1.5
-    buffer_duration: float = 1.0
+    response_silence_threshold: float = 1.0  # Shorter for better responsiveness
+    buffer_duration: float = 0.5  # Reduced buffer for less latency
 
 
 @dataclass
@@ -76,10 +76,11 @@ class SpeechDetectionConfig:
 
 @dataclass
 class AudioConfig:
-    channels: int = 1
-    sample_rate: int = 16000
-    chunk_size: int = 1024
-    format: int = pyaudio.paInt16
+    # ALSA-friendly configuration
+    channels: int = 1  # Mono for better speech recognition
+    sample_rate: int = 16000  # Standard for speech recognition
+    chunk_size: int = 512  # Smaller chunks for better latency
+    format: int = pyaudio.paInt16  # 16-bit audio
     input_device_index: int | None = None
     output_device_index: int | None = None
     device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
