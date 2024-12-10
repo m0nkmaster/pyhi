@@ -28,7 +28,7 @@ def get_sound_path(filename: str) -> str:
 @dataclass
 class AudioRecorderConfig:
     wake_word_silence_threshold: float = 0.5
-    response_silence_threshold: float = 2.0
+    response_silence_threshold: float = 1.5
     buffer_duration: float = 1.0
 
 
@@ -76,10 +76,10 @@ class SpeechDetectionConfig:
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 16000  # Required by Porcupine
     channels: int = 1
-    chunk_size: int = 1024     # Match Porcupine's frame length
-    format: int = pyaudio.paInt16  # 16-bit linear PCM
+    sample_rate: int = 16000
+    chunk_size: int = 1024
+    format: int = pyaudio.paInt16
     input_device_index: int | None = None
     output_device_index: int | None = None
     device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)

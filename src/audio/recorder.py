@@ -61,20 +61,33 @@ class PyAudioRecorder:
                 channels=self.config.channels,
                 rate=self.config.sample_rate,
                 input=True,
-                frames_per_buffer=self.config.chunk_size
+                frames_per_buffer=self.config.chunk_size,
+                input_device_index=None  # Use default input device
             )
         
         try:
             frames = []
             silence_chunks = 0
             speech_detected = False
-            silence_threshold = 500  # Adjust this value based on your microphone
             
-            # Calculate silence chunks more precisely
+            # Dynamic silence threshold based on ambient noise
+            # Record a short sample to determine ambient noise level
+            ambient_samples = []
+            for _ in range(10):  # Sample for 10 chunks
+                data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
+                if data:
+                    audio_data = np.frombuffer(data, dtype=np.int16)
+                    ambient_samples.append(np.abs(audio_data).mean())
+            
+            # Set silence threshold to 2x the average ambient noise
+            ambient_level = np.mean(ambient_samples)
+            silence_threshold = max(150, ambient_level * 2)  # At least 150 to avoid ultra-sensitive
+            
+            # Calculate silence chunks based on config
             chunks_per_second = self.config.sample_rate / self.config.chunk_size
             max_silence_chunks = round(chunks_per_second * self.recorder_config.response_silence_threshold)
             
-            # First wait for speech to begin - reduced from 2s to 1s
+            # First wait for speech to begin
             max_wait_chunks = round(chunks_per_second * 1)  # Wait up to 1 second for speech to start
             for _ in range(max_wait_chunks):
                 data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
@@ -82,7 +95,9 @@ class PyAudioRecorder:
                     continue
                     
                 audio_data = np.frombuffer(data, dtype=np.int16)
-                if np.abs(audio_data).mean() > silence_threshold:
+                current_volume = np.abs(audio_data).mean()
+                
+                if current_volume > silence_threshold:
                     frames.append(data)
                     speech_detected = True
                     break
@@ -109,7 +124,10 @@ class PyAudioRecorder:
                 else:
                     silence_chunks = 0  # Reset silence counter when we hear something
             
-            return b''.join(frames) if frames else None
+            # Only return if we captured enough frames
+            if len(frames) > max_wait_chunks:  # Ensure we have more than just the initial detection
+                return b''.join(frames)
+            return None
             
         except Exception as e:
             raise AudioRecorderError(f"Error recording audio: {e}")
