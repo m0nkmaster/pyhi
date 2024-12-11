@@ -11,6 +11,9 @@ This document provides a detailed breakdown of all configuration options availab
 - `PICOVOICE_API_KEY`: Your Picovoice API key
   - Required for wake word detection using Porcupine
   - Must be set in `.env` file or environment
+- `ANTHROPIC_API_KEY`: Your Anthropic API key
+  - Required for Claude chat functionality
+  - Must be set in `.env` file or environment
 
 ## Wake Words
 
@@ -40,6 +43,23 @@ Located in `src/assets/`:
 - `beep.mp3`: Played when ready for next question
 - `bing-bong.mp3`: Played when going back to sleep mode
 
+## AI Configuration
+
+### AI Providers
+- **OpenAI**: Used for chat completions and text-to-speech.
+- **Claude (Anthropic)**: Used for chat completions.
+
+### Configuration Options
+- `chat_provider`: Determines which AI provider to use for chat completions. Options are 'openai' or 'claude'.
+- `chat_model`: Specifies the model to use for chat completions. Default is 'gpt-3.5-turbo' for OpenAI and 'claude-3-opus-20240229' for Claude.
+
+Example configuration:
+```python
+# In config.py
+chat_provider: str = "openai"  # Options: 'openai', 'claude'
+chat_model: str = "gpt-3.5-turbo"
+```
+
 ## Configuration Classes
 
 ### AppConfig
@@ -52,6 +72,8 @@ class AppConfig:
     words: list[str] | None = None     # Wake words for Porcupine
     temp_recording_path: str = "recording.wav"
     temp_response_path: str = "response.mp3"
+    chat_provider: str = "openai"      # Options: 'openai', 'claude'
+    chat_model: str = "gpt-3.5-turbo"
 ```
 
 ### AudioRecorderConfig
@@ -136,3 +158,4 @@ Controls text-to-speech settings.
 class TTSConfig:
     model: str = "tts-1"              # OpenAI TTS model
     voice: str = "nova"               # Voice selection
+```
