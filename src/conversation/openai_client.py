@@ -91,34 +91,3 @@ class OpenAIWrapper:
         except Exception as e:
             print(f"Error converting text to speech: {e}")
             return None
-    
-    def transcribe_audio(
-        self,
-        audio_file: str,
-        language: str = "en",
-        temperature: float = 0.2
-    ) -> Optional[str]:
-        """
-        Transcribe audio using OpenAI's Whisper API.
-        
-        Args:
-            audio_file: Path to the audio file
-            language: Language code
-            temperature: Sampling temperature
-        
-        Returns:
-            Optional[str]: Transcribed text or None if failed
-        """
-        try:
-            with open(audio_file, "rb") as audio:
-                transcript = self.client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio,
-                    language=language,
-                    response_format="text",
-                    temperature=temperature
-                )
-            return transcript
-        except Exception as e:
-            print(f"Error transcribing audio: {e}")
-            return None 

@@ -12,6 +12,7 @@ import signal
 import sys
 
 from openai import OpenAI
+from .conversation.claude_client import ClaudeWrapper
 
 from .config import (
     AppConfig,
@@ -22,6 +23,7 @@ from .config import (
     TTSConfig,
     WordDetectionConfig,
     AudioDeviceConfig,
+    AIConfig
 )
 from .audio.player import PyAudioPlayer, AudioPlayerError
 from .audio.recorder import PyAudioRecorder, AudioRecorderError
@@ -44,6 +46,7 @@ class VoiceAssistant:
         """Initialize the voice assistant using SpeechRecognition."""
         self.running = True
         self.recognizer = sr.Recognizer()
+        self.recognizer.dynamic_energy_threshold = True  # Enable dynamic energy threshold
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
         logging.info("Initializing VoiceAssistant...")
@@ -52,43 +55,27 @@ class VoiceAssistant:
         self.words = words
         self.timeout_seconds = timeout_seconds or 10.0  # Set default timeout
 
+        # Instantiate AIConfig
+        ai_config = AIConfig()
+
+        # Create an OpenAI client instance
+        openai_client = OpenAI(api_key=ai_config.openai_api_key)
+        
+        # Always initialize OpenAIWrapper for TTS and transcription
+        self.openai_wrapper = OpenAIWrapper(client=openai_client)
+
+        # Select AI client based on configuration for chat completions
+        if ai_config.provider == "openai":
+            self.ai_client = self.openai_wrapper
+        elif ai_config.provider == "claude":
+            self.ai_client = ClaudeWrapper(api_key=ai_config.anthropic_api_key)
+        else:
+            raise ValueError("Unsupported AI provider specified.")
+
         # Warn about speech recognition limitations
         print_with_emoji("Note: Using free Google Speech Recognition API (limited to ~50 requests/day)", "ℹ️")
         logging.warning("Using free Google Speech Recognition API with daily request limits")
 
-        self.initialize_openai_client()
-        self.setup_audio_system()
-        self.load_activation_sound()
-        self.load_confirmation_sound()
-        self.load_ready_sound()
-        self.load_sleep_sound()
-
-        # Initialize state
-        self.is_awake = False
-        self.last_interaction: Optional[datetime] = None
-
-        self.response_queue = queue.Queue()
-
-    def initialize_openai_client(self):
-        """Initialize OpenAI client and components."""
-        logging.info("Initializing OpenAI client...")
-        print_with_emoji("Initializing OpenAI client...", "🔧")
-        openai_client = OpenAI()
-        
-        logging.info("Initializing components...")
-        print_with_emoji("Initializing components...", "🔧")
-        self.openai_wrapper = OpenAIWrapper(
-            client=openai_client,
-            chat_config=ChatConfig(),
-            tts_config=TTSConfig()
-        )
-        
-        # Initialize conversation manager
-        self.chat_config = ChatConfig()
-        self.conversation_manager = ChatConversationManager(
-            system_prompt=self.chat_config.system_prompt
-        )
-        
         # Initialize wake word detector with Porcupine
         try:
             self.word_detector = PorcupineWakeWordDetector(
@@ -101,6 +88,25 @@ class VoiceAssistant:
             logging.error(f"Error initializing wake word detector: {e}")
             print_with_emoji(f"Error initializing wake word detector: {e}", "❌")
             raise
+
+        # Initialize conversation manager
+        self.conversation_manager = ChatConversationManager(
+            system_prompt=ChatConfig().system_prompt
+        )
+        logging.info("Conversation manager initialized successfully!")
+        print_with_emoji("Conversation manager initialized successfully!", "✅")
+
+        self.setup_audio_system()
+        self.load_activation_sound()
+        self.load_confirmation_sound()
+        self.load_ready_sound()
+        self.load_sleep_sound()
+
+        # Initialize state
+        self.is_awake = False
+        self.last_interaction: Optional[datetime] = None
+
+        self.response_queue = queue.Queue()
 
     def setup_audio_system(self):
         """Set up the audio system."""
@@ -189,15 +195,24 @@ class VoiceAssistant:
         """Listen for a voice command and return the recognized text."""
         logging.info("Listening for command...")
         print_with_emoji("Listening for command...", "🎤")
-        audio_chunk = self.audio_recorder.record_chunk()
-        command = self.recognizer.recognize_google(audio_chunk)
-        if command:
-            logging.info(f"Recognized command: {command}")
-            print_with_emoji(f"Recognized command: {command}", "✅")
-        else:
-            logging.warning("No command recognized.")
-            print_with_emoji("No command recognized.", "❌")
-        return command
+        with sr.Microphone() as source:
+            self.recognizer.adjust_for_ambient_noise(source, duration=1)  # Adjust for ambient noise
+            try:
+                audio = self.recognizer.listen(source, timeout=5)  # Add timeout to listen
+                command = self.recognizer.recognize_google(audio, show_all=False, phrase_list=self.words)
+                logging.info(f"Recognized command: {command}")
+                print_with_emoji(f"Recognized command: {command}", "✅")
+                return command
+            except sr.UnknownValueError:
+                logging.warning("Could not understand audio")
+                print_with_emoji("Sorry, I couldn't understand that.", "🤔")
+            except sr.RequestError as e:
+                logging.error(f"Could not request results; {e}")
+                print_with_emoji("Speech recognition error. Please try again.", "❌")
+            except sr.WaitTimeoutError:
+                logging.warning("Listening timed out while waiting for phrase to start")
+                print_with_emoji("Listening timed out.", "⏰")
+        return None
 
     def run(self):
         """Run the voice assistant main loop."""
@@ -288,10 +303,18 @@ class VoiceAssistant:
                             print(f"[{datetime.now()}] Starting API call...")
                             logging.info("Getting assistant response...")
                             
+                            # Print the message being sent to the API
+                            print(f"Message sent to API: {self.conversation_manager.get_conversation_history()}")
+
                             # Make the API call
-                            response = self.openai_wrapper.get_chat_completion(
-                                self.conversation_manager.get_conversation_history()
-                            )
+                            if isinstance(self.ai_client, ClaudeWrapper):
+                                response = self.ai_client.get_completion(
+                                    self.conversation_manager.get_conversation_history()
+                                )
+                            else:
+                                response = self.ai_client.get_chat_completion(
+                                    self.conversation_manager.get_conversation_history()
+                                )
                             print(f"[{datetime.now()}] Got API response")
                             
                             # Convert response to speech and play it
