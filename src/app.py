@@ -11,8 +11,7 @@ import queue
 import signal
 import sys
 
-from openai import OpenAI
-from .conversation.claude_client import ClaudeWrapper
+from .conversation.ai_client import AIWrapper
 
 from .config import (
     AppConfig,
@@ -20,7 +19,6 @@ from .config import (
     AudioPlayerConfig,
     AudioRecorderConfig,
     ChatConfig,
-    TTSConfig,
     WordDetectionConfig,
     AudioDeviceConfig,
     AIConfig
@@ -57,20 +55,9 @@ class VoiceAssistant:
 
         # Instantiate AIConfig
         ai_config = AIConfig()
-
-        # Create an OpenAI client instance
-        openai_client = OpenAI(api_key=ai_config.openai_api_key)
         
-        # Always initialize OpenAIWrapper for TTS and transcription
-        self.openai_wrapper = OpenAIWrapper(client=openai_client)
-
-        # Select AI client based on configuration for chat completions
-        if ai_config.provider == "openai":
-            self.ai_client = self.openai_wrapper
-        elif ai_config.provider == "claude":
-            self.ai_client = ClaudeWrapper(api_key=ai_config.anthropic_api_key)
-        else:
-            raise ValueError("Unsupported AI provider specified.")
+        # Initialize the AI wrapper
+        self.ai_client = AIWrapper(ai_config)
 
         # Warn about speech recognition limitations
         print_with_emoji("Note: Using free Google Speech Recognition API (limited to ~50 requests/day)", "ℹ️")
@@ -307,19 +294,14 @@ class VoiceAssistant:
                             print(f"Message sent to API: {self.conversation_manager.get_conversation_history()}")
 
                             # Make the API call
-                            if isinstance(self.ai_client, ClaudeWrapper):
-                                response = self.ai_client.get_completion(
-                                    self.conversation_manager.get_conversation_history()
-                                )
-                            else:
-                                response = self.ai_client.get_chat_completion(
-                                    self.conversation_manager.get_conversation_history()
-                                )
+                            response = self.ai_client.get_completion(
+                                self.conversation_manager.get_conversation_history()
+                            )
                             print(f"[{datetime.now()}] Got API response")
                             
                             # Convert response to speech and play it
                             logging.info("Converting response to speech...")
-                            audio_data = self.openai_wrapper.text_to_speech(response)
+                            audio_data = self.ai_client.text_to_speech(response)
                             if audio_data:
                                 try:
                                     logging.info("Playing response...")

@@ -101,38 +101,29 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-3.5-turbo"
-    max_completion_tokens: int = 250
-    temperature: float = 0.7
     system_prompt: str = "You are a voice assistant in a lively household. Keep your responses concise, clear, and under 2 sentences when possible. Be direct and helpful."
 
 
 @dataclass
-class TTSConfig:
-    model: str = "tts-1"
-    voice: str = "nova" # "alloy", "echo", "fable", "onyx", "nova", "shimmer"
-
-
-@dataclass
 class WordDetectionConfig:
-    # Debug options
-    debug_detection: bool = False
-    # Frame length in milliseconds
-    frame_length_ms: int = 512
-    # Use platform-specific model path
     model_path = os.path.join(
         os.path.dirname(__file__), 
         "assets",
         "Hey-Chat_en_mac_v3_0_0.ppn" if platform.system().lower() == 'darwin' else "Hey-Chat_en_raspberry-pi_v3_0_0.ppn"
     )
 
-
 @dataclass
 class AIConfig:
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
-    provider: str = "openai"  # Options: 'openai', 'claude'
-
+    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))# Options: 'openai', 'claude'
+    voice: str = "nova"
+    voice_model: str = "tts-1"
+    #chat_provider: str = "claude"  
+    #chat_model: str = "claude-3-opus-20240229"
+    chat_provider: str = "openai"  
+    chat_model: str = "gpt-3.5-turbo"
+    max_completion_tokens: int = 250
+    temperature: float = 0.7
 
 @dataclass
 class AppConfig:
