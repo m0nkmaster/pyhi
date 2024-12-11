@@ -11,7 +11,6 @@ load_dotenv()
 if not os.getenv("OPENAI_API_KEY"):
     raise ValueError("OPENAI_API_KEY not found in environment variables. Please check your .env file.")
 
-
 # Audio file paths relative to src/assets
 ACTIVATION_SOUND = "bing.mp3"
 CONFIRMATION_SOUND = "elevator.mp3"  
@@ -129,8 +128,16 @@ class WordDetectionConfig:
 
 
 @dataclass
+class AIConfig:
+    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))
+    provider: str = "openai"  # Options: 'openai', 'claude'
+
+
+@dataclass
 class AppConfig:
     timeout_seconds: float = 10.0
     words: list[str] | None = None
     temp_recording_path: str = "recording.wav"
     temp_response_path: str = "response.mp3"
+    ai_config: AIConfig = field(default_factory=AIConfig)
