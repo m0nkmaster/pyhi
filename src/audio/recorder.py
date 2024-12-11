@@ -40,8 +40,15 @@ class PyAudioRecorder:
                 frames_per_buffer=self.config.chunk_size,
                 input_device_index=self.input_device_index
             )
-        audio_data = self.stream.read(self.config.chunk_size)
-        return audio_data
+        try:
+            audio_data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
+            return audio_data
+        except IOError as e:
+            if e.errno == pyaudio.paInputOverflowed:
+                logging.warning("Input overflowed, skipping this chunk.")
+                return b''  # Return empty bytes to indicate no data was captured
+            else:
+                raise
 
     def recognize_speech_from_chunk(self, audio_chunk: bytes) -> Optional[str]:
         """Recognize speech from an audio chunk using the SpeechRecognition library."""
