@@ -41,45 +41,33 @@ def print_with_emoji(message: str, emoji: str):
 
 class VoiceAssistant:
     def __init__(self, words: list[str], timeout_seconds: float | None = None):
-        """Initialize the voice assistant."""
+        """Initialize the voice assistant using SpeechRecognition."""
         self.running = True
+        self.recognizer = sr.Recognizer()
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-        
         logging.info("Initializing VoiceAssistant...")
         print_with_emoji("Initializing VoiceAssistant...", "🤖")
-        
+        self.audio_recorder = PyAudioRecorder(AudioConfig())
+        self.words = words
+        self.timeout_seconds = timeout_seconds or 10.0  # Set default timeout
+
         # Warn about speech recognition limitations
         print_with_emoji("Note: Using free Google Speech Recognition API (limited to ~50 requests/day)", "ℹ️")
         logging.warning("Using free Google Speech Recognition API with daily request limits")
-        
-        self.initialize_configurations(words, timeout_seconds)
+
         self.initialize_openai_client()
         self.setup_audio_system()
         self.load_activation_sound()
         self.load_confirmation_sound()
         self.load_ready_sound()
         self.load_sleep_sound()
-        
+
         # Initialize state
         self.is_awake = False
         self.last_interaction: Optional[datetime] = None
-        
-        # Initialize speech recognizer
-        self.recognizer = sr.Recognizer()
-        
-        self.response_queue = queue.Queue()
 
-    def initialize_configurations(self, words: list[str], timeout_seconds: float | None):
-        """Initialize configurations for the voice assistant."""
-        self.app_config = AppConfig(
-            words=words,
-            timeout_seconds=timeout_seconds or AppConfig().timeout_seconds,
-            temp_recording_path="recording.wav",
-            temp_response_path="response.mp3"
-        )
-        self.audio_config = AudioConfig()
-        self.audio_player_config = AudioPlayerConfig()
+        self.response_queue = queue.Queue()
 
     def initialize_openai_client(self):
         """Initialize OpenAI client and components."""
@@ -105,7 +93,7 @@ class VoiceAssistant:
         try:
             self.word_detector = PorcupineWakeWordDetector(
                 config=WordDetectionConfig(),
-                audio_config=self.audio_config
+                audio_config=AudioConfig()
             )
             logging.info("Wake word detector initialized successfully!")
             print_with_emoji("Wake word detector initialized successfully!", "✅")
@@ -143,7 +131,7 @@ class VoiceAssistant:
         # Initialize audio player with list_devices_on_start=False since we'll list devices ourselves
         self.audio_player = PyAudioPlayer(
             on_error=lambda e: logging.error(f"Audio playback error: {e}"),
-            config=self.audio_player_config,
+            config=AudioPlayerConfig(),
             device_config=AudioDeviceConfig(list_devices_on_start=False)
         )
 
@@ -160,12 +148,6 @@ class VoiceAssistant:
                 logging.info(f"Output Device - Index {i}: {device_info['name']}{' (Selected)' if is_selected else ''}")
 
         print()  # Add a blank line for better readability
-
-        # Initialize audio recorder
-        self.audio_recorder = PyAudioRecorder(
-            config=self.audio_config,
-            recorder_config=AudioRecorderConfig()
-        )
 
     def load_activation_sound(self):
         """Load the activation sound file."""
@@ -202,6 +184,20 @@ class VoiceAssistant:
             print_with_emoji(f"Warning: Sleep sound file not found at {self.sleep_sound_path}", "⚠️")
         else:
             logging.info(f"Loaded sleep sound from {self.sleep_sound_path}")
+
+    def listen_for_command(self) -> Optional[str]:
+        """Listen for a voice command and return the recognized text."""
+        logging.info("Listening for command...")
+        print_with_emoji("Listening for command...", "🎤")
+        audio_chunk = self.audio_recorder.record_chunk()
+        command = self.recognizer.recognize_google(audio_chunk)
+        if command:
+            logging.info(f"Recognized command: {command}")
+            print_with_emoji(f"Recognized command: {command}", "✅")
+        else:
+            logging.warning("No command recognized.")
+            print_with_emoji("No command recognized.", "❌")
+        return command
 
     def run(self):
         """Run the voice assistant main loop."""
@@ -252,9 +248,9 @@ class VoiceAssistant:
                 
                 # Save audio with consistent format
                 with wave.open("recording.wav", "wb") as wf:
-                    wf.setnchannels(self.audio_config.channels)
+                    wf.setnchannels(self.audio_recorder.config.channels)
                     wf.setsampwidth(2)  # 16-bit audio
-                    wf.setframerate(self.audio_config.sample_rate)
+                    wf.setframerate(self.audio_recorder.config.sample_rate)
                     wf.writeframes(audio_data)
                 logging.info("Audio recorded and saved")
 
@@ -369,64 +365,13 @@ class VoiceAssistant:
         
         return False
 
-    def _record_user_input(self) -> Optional[str]:
-        """Record user input with silence detection."""
-        logging.info("Listening for your question...")
-        print_with_emoji("Listening for your question...", "🎤")
-        
-        # Clear any previous audio buffer
-        self.audio_recorder.clear_buffer()
-        
-        audio_data = self.audio_recorder.record_speech()
-        if not audio_data:  # No speech detected
-            return None
-        
-        # Save audio with consistent format
-        with wave.open("recording.wav", "wb") as wf:
-            wf.setnchannels(self.audio_config.channels)
-            wf.setsampwidth(2)  # 16-bit audio
-            wf.setframerate(self.audio_config.sample_rate)
-            wf.writeframes(audio_data)
-        logging.info("Audio recorded and saved")
-
-        # Convert speech to text using speech_recognition
-        try:
-            with sr.AudioFile("recording.wav") as source:
-                audio = self.recognizer.record(source)
-                try:
-                    transcript = self.recognizer.recognize_google(audio)
-                    logging.info(f"You said: {transcript}")
-                    
-                    # Only play confirmation sound if we got valid speech
-                    if self.confirmation_sound_path and os.path.exists(self.confirmation_sound_path):
-                        logging.info(f"Playing confirmation sound from {self.confirmation_sound_path}")
-                        print_with_emoji("Processing your question...", "⚙️")
-                        self.audio_player.play(self.confirmation_sound_path, volume=1.0)
-                    
-                    return transcript
-                except sr.UnknownValueError:
-                    logging.info("Could not understand audio")
-                    print_with_emoji("Sorry, I couldn't understand that. Could you try again?", "🤔")
-                    return None
-                except sr.RequestError as e:
-                    if "recognition request failed" in str(e):
-                        logging.error("Daily limit for free Google Speech Recognition may have been reached")
-                        print_with_emoji("Speech recognition limit reached. Consider upgrading to Google Cloud Speech API", "⚠️")
-                    else:
-                        logging.error(f"Could not request results; {e}")
-                        print_with_emoji("Speech recognition error. Please try again.", "❌")
-                    return None
-        except Exception as e:
-            logging.error(f"Error processing audio: {e}")
-            return None
-
     def _check_timeout(self) -> bool:
         """Check if the session should timeout."""
         if not self.last_interaction:
             return False
         
         elapsed = (datetime.now() - self.last_interaction).total_seconds()
-        remaining = self.app_config.timeout_seconds - elapsed
+        remaining = self.timeout_seconds - elapsed
         
         if remaining > 0:
             logging.info(f"Session timeout in: {remaining:.1f}s...")
@@ -435,15 +380,14 @@ class VoiceAssistant:
         
         return True
 
-    def _signal_handler(self, signum, frame):
-        """Handle shutdown signals gracefully."""
-        print_with_emoji("\nShutting down gracefully...", "👋")
-        logging.info("Received shutdown signal")
+    def _signal_handler(self, signal_received, frame):
+        """Handle termination signals."""
+        logging.info("Signal received, stopping VoiceAssistant...")
         self.running = False
         if self.audio_recorder and self.audio_recorder.stream:
             self.audio_recorder.stream.stop_stream()
             self.audio_recorder.stream.close()
-        if hasattr(self, 'audio_recorder') and hasattr(self.audio_recorder, 'audio'):
+        if hasattr(self.audio_recorder, 'audio'):
             self.audio_recorder.audio.terminate()
         self._cleanup()
         sys.exit(0)
@@ -452,10 +396,10 @@ class VoiceAssistant:
         """Clean up temporary files."""
         logging.info("Cleaning up temporary files...")
         try:
-            if os.path.exists(self.app_config.temp_recording_path):
-                os.remove(self.app_config.temp_recording_path)
-            if os.path.exists(self.app_config.temp_response_path):
-                os.remove(self.app_config.temp_response_path)
+            if os.path.exists("recording.wav"):
+                os.remove("recording.wav")
+            if os.path.exists("response.mp3"):
+                os.remove("response.mp3")
         except Exception as e:
             logging.error(f"Error cleaning up files: {e}")
 
