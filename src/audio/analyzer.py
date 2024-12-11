@@ -1,5 +1,7 @@
 import numpy as np
 from ..utils.types import AudioConfig
+import speech_recognition as sr
+import logging
 
 def calculate_rms(audio_data: np.ndarray) -> float:
     """Calculate the Root Mean Square (RMS) amplitude of the audio data."""
@@ -29,15 +31,16 @@ def analyze_frequency_components(audio_data: np.ndarray, sample_rate: int) -> tu
 
 def is_speech(audio_bytes: bytes, config: AudioConfig) -> bool:
     """
-    Detect if audio data contains speech using amplitude-based detection.
+    Detect if audio data contains speech using the SpeechRecognition library.
     """
-    # Convert bytes to int16 array
-    pcm = np.frombuffer(audio_bytes, dtype=np.int16)
-    
-    # Calculate RMS amplitude
-    rms = np.sqrt(np.mean(np.square(pcm.astype(np.float32))))
-    
-    # Higher threshold for better speech detection
-    threshold = 500  # Increased from default to reduce false positives
-    
-    return rms > threshold
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(audio_bytes) as source:
+        audio = recognizer.record(source)
+    try:
+        recognizer.recognize_google(audio)
+        return True
+    except sr.UnknownValueError:
+        return False
+    except sr.RequestError as e:
+        logging.error(f"Could not request results from Google Speech Recognition service; {e}")
+        return False

@@ -5,6 +5,7 @@ from ..utils.types import AudioConfig
 from ..config import AudioRecorderConfig
 import speech_recognition as sr
 from collections import deque
+import logging
 
 class AudioRecorderError(Exception):
     """Custom exception for audio recorder errors."""
@@ -16,32 +17,17 @@ class PyAudioRecorder:
         config: AudioConfig,
         recorder_config: Optional[AudioRecorderConfig] = None
     ):
-        """Initialize the PyAudio recorder."""
+        """Initialize the PyAudio recorder using SpeechRecognition."""
         self.config = config
         self.recorder_config = recorder_config or AudioRecorderConfig()
+        self.recognizer = sr.Recognizer()
         self.audio = pyaudio.PyAudio()
         self.stream = None
-        self.recognizer = sr.Recognizer()
-        
-        # Find the Jabra device if available
         self.input_device_index = None
-        print("\nAvailable audio devices:")
-        for i in range(self.audio.get_device_count()):
-            device_info = self.audio.get_device_info_by_index(i)
-            print(f"Device {i}: {device_info['name']} (inputs: {device_info['maxInputChannels']}, outputs: {device_info['maxOutputChannels']})")
-            if 'Jabra' in device_info['name']:
-                self.input_device_index = i
-                print(f"Selected Jabra device: {device_info['name']}")
-                break
-        
-        # Calculate chunks per second more precisely
-        self.chunks_per_second = self.config.sample_rate / self.config.chunk_size
-        buffer_chunks = int(self.chunks_per_second * 2)  # 2 seconds buffer
-        self.audio_buffer: Deque[bytes] = deque(maxlen=buffer_chunks)
 
     def clear_buffer(self):
         """Clear the audio buffer."""
-        self.audio_buffer.clear()
+        # Removed buffer management
 
     def record_chunk(self) -> bytes:
         """Record a fixed chunk of audio for wake word detection."""
@@ -51,18 +37,23 @@ class PyAudioRecorder:
                 channels=self.config.channels,
                 rate=self.config.sample_rate,
                 input=True,
-                frames_per_buffer=self.config.chunk_size
+                frames_per_buffer=self.config.chunk_size,
+                input_device_index=self.input_device_index
             )
-        
+        audio_data = self.stream.read(self.config.chunk_size)
+        return audio_data
+
+    def recognize_speech_from_chunk(self, audio_chunk: bytes) -> Optional[str]:
+        """Recognize speech from an audio chunk using the SpeechRecognition library."""
+        audio_data = sr.AudioData(audio_chunk, self.config.sample_rate, self.config.format)
         try:
-            # Record exactly 1 chunk of audio
-            data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
-            if data:
-                self.audio_buffer.append(data)
-            return data
-            
-        except Exception as e:
-            raise AudioRecorderError(f"Error recording audio: {e}")
+            return self.recognizer.recognize_google(audio_data)
+        except sr.UnknownValueError:
+            logging.warning("Google Speech Recognition could not understand audio")
+            return None
+        except sr.RequestError as e:
+            logging.error(f"Could not request results from Google Speech Recognition service; {e}")
+            return None
 
     def record_speech(self) -> Optional[bytes]:
         """Record speech until silence is detected."""
@@ -116,7 +107,6 @@ class PyAudioRecorder:
                     current_volume = np.abs(audio_data).mean()
                     
                     if current_volume > silence_threshold:
-                        frames.extend([d for d in self.audio_buffer])  # Add buffer content
                         frames.append(data)
                         speech_detected = True
                         break
