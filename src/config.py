@@ -90,7 +90,6 @@ class AudioConfig:
         if self.chunk_size != 1024:
             print("Warning: chunk_size should be 1024 for Porcupine wake word detection")
 
-
 @dataclass
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
@@ -98,11 +97,9 @@ class AudioPlayerConfig:
     volume_level: float = 1.0  # 0.0 to 1.0
     output_device_index: int | None = None
 
-
 @dataclass
 class ChatConfig:
     system_prompt: str = "You are a voice assistant in a lively household. Keep your responses concise, clear, and under 2 sentences when possible. Be direct and helpful."
-
 
 @dataclass
 class WordDetectionConfig:

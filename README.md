@@ -17,11 +17,14 @@ A Python-based voice assistant that enables natural conversations with ChatGPT u
 - Intelligent silence detection for speech processing
 - System audio integration for reliable playback
 - Audio feedback sounds for clear interaction states
+- Unified AI interactions using the `AIWrapper` class for both OpenAI and Claude APIs
+- Configurable AI provider and model settings
 
 ## Prerequisites
 
-- Python 3.9 or higher
 - OpenAI API key (for ChatGPT and TTS)
+- Anthropic API key (for Claude chat completions)
+- Python 3.9 or higher
 - Picovoice API key (for Porcupine wake word detection)
 - Microphone for voice input
 - Audio output device (speakers/headphones)
@@ -49,8 +52,11 @@ pip install -r requirements-test.txt
 4. Create a `.env` file in the project root:
 ```bash
 OPENAI_API_KEY=your_openai_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
 PICOVOICE_API_KEY=your_picovoice_key_here
 ```
+
+Ensure you have both OpenAI and Anthropic API keys set in your environment before running the application.
 
 ### Platform-Specific Setup
 
@@ -142,6 +148,7 @@ See [CONFIG.md](CONFIG.md) for detailed configuration options, including:
 - Silence detection thresholds
 - ChatGPT and TTS settings
 - Timeout values
+- AI provider and model settings
 
 ## Contributing
 
@@ -158,6 +165,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 
 - OpenAI for ChatGPT and TTS APIs
+- Anthropic for Claude chat completions
 - Picovoice for Porcupine wake word engine
 - PyAudio contributors
 - All other open-source dependencies
