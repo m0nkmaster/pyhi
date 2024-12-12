@@ -1,8 +1,13 @@
-import pytest
+import os
 import sys
-from pathlib import Path
+import pytest
 
-# Add the src directory to Python path
-src_path = str(Path(__file__).parent.parent / "src")
-if src_path not in sys.path:
-    sys.path.insert(0, src_path) 
+# Get the absolute path of the project root directory
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add the project root directory to the Python path
+sys.path.insert(0, project_root)
+
+# Configure pytest-asyncio default loop scope
+def pytest_configure(config):
+    config.option.asyncio_default_fixture_loop_scope = "function"

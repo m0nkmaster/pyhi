@@ -61,9 +61,7 @@ class PyAudioPlayer(AudioPlayer):
         with self._lock:
             try:
                 # Stop any existing playback
-                if self._stream and self._stream.is_active():
-                    self._stream.stop_stream()
-                    self._stream.close()
+                self.stop()
                 
                 # Convert audio to WAV format
                 frames, rate, channels, width, frame_count = self._convert_to_wav(audio_data)
@@ -75,32 +73,48 @@ class PyAudioPlayer(AudioPlayer):
                     rate=rate,
                     output=True,
                     output_device_index=self.config.output_device_index,
-                    start=False  # Don't start yet
+                    start=False,  # Don't start yet
+                    stream_callback=None,  # Use blocking mode for better stability
+                    frames_per_buffer=1024 * 4  # Larger buffer for stability
                 )
                 
-                # Write data in chunks to prevent memory issues
-                chunk_size = 1024 * 4  # Larger chunks for smoother playback
-                offset = 0
-                
                 def play_audio():
-                    nonlocal offset
                     try:
+                        # Pre-buffer some data before starting
                         self._stream.start_stream()
-                        while offset < len(frames):
+                        
+                        # Write data in chunks
+                        chunk_size = 1024 * 4
+                        for i in range(0, len(frames), chunk_size):
                             if not self._stream.is_active():
                                 break
-                            chunk = frames[offset:offset + chunk_size]
+                            
+                            chunk = frames[i:i + chunk_size]
+                            if not chunk:
+                                break
+                                
                             if volume != 1.0:
                                 # Apply volume in-place
                                 chunk = b''.join(
                                     int(b * volume).to_bytes(1, byteorder='little', signed=True)
                                     for b in chunk
                                 )
-                            self._stream.write(chunk, exception_on_underflow=False)
-                            offset += chunk_size
+                            
+                            try:
+                                self._stream.write(chunk, exception_on_underflow=False)
+                            except OSError as e:
+                                logging.error(f"Stream error: {e}")
+                                break
+                                
+                    except Exception as e:
+                        logging.error(f"Playback error: {e}")
                     finally:
-                        self._stream.stop_stream()
-                        self._stream.close()
+                        try:
+                            if self._stream and self._stream.is_active():
+                                self._stream.stop_stream()
+                                self._stream.close()
+                        except Exception as e:
+                            logging.error(f"Error closing stream: {e}")
                         self._stream = None
                 
                 if block:
@@ -118,10 +132,15 @@ class PyAudioPlayer(AudioPlayer):
 
     def stop(self):
         """Stop any currently playing audio."""
-        if self._stream and self._stream.is_active():
-            self._stream.stop_stream()
-            self._stream.close()
-            self._stream = None
+        if self._stream:
+            try:
+                if self._stream.is_active():
+                    self._stream.stop_stream()
+                self._stream.close()
+            except Exception as e:
+                logging.error(f"Error stopping stream: {e}")
+            finally:
+                self._stream = None
 
     def is_playing(self) -> bool:
         """Check if audio is currently playing."""
