@@ -36,13 +36,13 @@ class AudioRecorderConfig:
 class AudioDeviceConfig:
     # Device selection
     auto_select_device: bool = True
-    preferred_input_device_name: str | None = None  # Set to None by default
-    preferred_output_device_name: str | None = None  # Set to None by default
+    preferred_input_device_name: str | None = "Jabra"  # Will match Jabra devices
+    preferred_output_device_name: str | None = "Jabra"
     excluded_device_names: list[str] = field(default_factory=lambda: ["BlackHole", "ZoomAudioDevice"])
     fallback_to_default: bool = True
         
     # Buffer settings
-    buffer_size_ms: int = 50  # Used to calculate chunk_size based on sample rate
+    buffer_size_ms: int = 100  # Increased from 50 for better stability
     
     # Error handling
     retry_on_error: bool = True
@@ -76,10 +76,10 @@ class SpeechDetectionConfig:
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 16000  # Required by Porcupine
-    channels: int = 1
-    chunk_size: int = 1024     # Match Porcupine's frame length
-    format: int = pyaudio.paInt16  # 16-bit linear PCM
+    sample_rate: int = 48000  # Match Jabra's native rate
+    channels: int = 2  # Stereo
+    chunk_size: int = 2048  # Increased buffer size
+    format: int = pyaudio.paInt16
     input_device_index: int | None = None
     output_device_index: int | None = None
     device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
@@ -87,14 +87,15 @@ class AudioConfig:
     
     def __post_init__(self):
         # Ensure chunk size matches Porcupine's frame length
-        if self.chunk_size != 1024:
-            print("Warning: chunk_size should be 1024 for Porcupine wake word detection")
+        if self.chunk_size != 2048:
+            print("Warning: chunk_size should be 2048 for better quality")
+
 
 @dataclass
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
     activation_sound_path: str = "src/assets/bing.mp3"
-    volume_level: float = 1.0  # 0.0 to 1.0
+    volume_level: float = 1.0  # Set to maximum
     output_device_index: int | None = None
 
 @dataclass
