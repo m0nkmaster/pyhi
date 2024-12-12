@@ -5,3 +5,4 @@ SpeechRecognition
 pvporcupine
 numpy
 anthropic
+pydub

@@ -1,27 +1,53 @@
-⏰ Session timeout in: 0.5s...
-🎤 Recording user input...
-Traceback (most recent call last):
-  File "/home/rob/pyhi/src/audio/player.py", line 53, in play
-    self._current_process = subprocess.Popen(
-                            ^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.11/subprocess.py", line 1024, in __init__
-    self._execute_child(args, executable, preexec_fn, close_fds,
-  File "/usr/lib/python3.11/subprocess.py", line 1901, in _execute_child
-    raise child_exception_type(errno_num, err_msg, err_filename)
-FileNotFoundError: [Errno 2] No such file or directory: 'afplay'
+============================= test session starts ==============================
+platform darwin -- Python 3.11.7, pytest-8.3.4, pluggy-1.5.0
+rootdir: /Users/robmacdonald/Documents/projects/pyhi
+configfile: pyproject.toml
+plugins: asyncio-0.24.0, cov-6.0.0, anyio-4.7.0, mock-3.14.0
+asyncio: mode=Mode.STRICT, default_loop_scope=function
+collected 44 items
 
-During handling of the above exception, another exception occurred:
+tests/test_app.py ..............                                         [ 31%]
+tests/test_audio.py ........                                             [ 50%]
+tests/test_config.py ..                                                  [ 54%]
+tests/test_conversation.py .......                                       [ 70%]
+tests/test_utils.py ......                                               [ 84%]
+tests/test_word_detection.py .......                                     [100%]
 
-Traceback (most recent call last):
-  File "<frozen runpy>", line 198, in _run_module_as_main
-  File "<frozen runpy>", line 88, in _run_code
-  File "/home/rob/pyhi/src/app.py", line 455, in <module>
-    exit(main())
-         ^^^^^^
-  File "/home/rob/pyhi/src/app.py", line 452, in main
-    assistant.run()
-  File "/home/rob/pyhi/src/app.py", line 218, in run
-    self.audio_player.play(self.sleep_sound_path, volume=1.0)
-  File "/home/rob/pyhi/src/audio/player.py", line 68, in play
-    raise AudioPlayerError(f"Error playing audio: {str(e)}")
-src.audio.player.AudioPlayerError: Error playing audio: [Errno 2] No such file or directory: 'afplay'
+=============================== warnings summary ===============================
+../../../.pyenv/versions/3.11.7/envs/pyhi/lib/python3.11/site-packages/speech_recognition/__init__.py:7
+  /Users/robmacdonald/.pyenv/versions/3.11.7/envs/pyhi/lib/python3.11/site-packages/speech_recognition/__init__.py:7: DeprecationWarning: 'aifc' is deprecated and slated for removal in Python 3.13
+    import aifc
+
+../../../.pyenv/versions/3.11.7/envs/pyhi/lib/python3.11/site-packages/speech_recognition/__init__.py:8
+  /Users/robmacdonald/.pyenv/versions/3.11.7/envs/pyhi/lib/python3.11/site-packages/speech_recognition/__init__.py:8: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+---------- coverage: platform darwin, python 3.11.7-final-0 ----------
+Name                                Stmts   Miss  Cover   Missing
+-----------------------------------------------------------------
+src/__init__.py                         1      0   100%
+src/_config-mac.py                     86     86     0%   1-135
+src/_config-raspberry-pi.py            83     83     0%   1-131
+src/app.py                            273    108    60%   74-77, 149-150, 158-159, 167-168, 176-177, 196-201, 214-225, 234-341, 352, 361-362, 396, 405, 407-409, 413-415, 418
+src/audio/__init__.py                   0      0   100%
+src/audio/analyzer.py                  53     32    40%   16, 25-38, 51-56, 61, 70-83, 89-90
+src/audio/player.py                    85     39    54%   28, 37-42, 48-49, 62-64, 70-91, 105-115, 120-121, 125-127, 131
+src/audio/recorder.py                 114     79    31%   46-51, 55-63, 67-159, 167-168, 173-174
+src/config.py                          86      2    98%   12, 91
+src/conversation/__init__.py            0      0   100%
+src/conversation/ai_client.py          32      6    81%   53-64
+src/conversation/claude_client.py      10     10     0%   1-23
+src/conversation/manager.py            33      9    73%   63, 74-77, 86-89
+src/conversation/openai_client.py      38     22    42%   31-33, 45-55, 68-93
+src/utils/__init__.py                   0      0   100%
+src/utils/audio_setup.py               86     10    88%   66, 93-94, 97, 107-114
+src/utils/list_devices.py              40     40     0%   1-49
+src/utils/types.py                     41     11    73%   28, 32, 37, 42, 47, 52, 56, 60, 64, 68, 72
+src/word_detection/__init__.py          0      0   100%
+src/word_detection/detector.py         37      0   100%
+-----------------------------------------------------------------
+TOTAL                                1098    537    51%
+
+======================== 44 passed, 2 warnings in 1.29s ========================

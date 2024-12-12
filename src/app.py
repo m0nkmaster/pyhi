@@ -280,12 +280,6 @@ class VoiceAssistant:
                             # Add message to conversation history immediately
                             self.conversation_manager.add_user_message(transcript)
 
-                            # Start playing confirmation sound non-blocking while waiting for API
-                            if self.confirmation_sound_path and os.path.exists(self.confirmation_sound_path):
-                                print(f"[{datetime.now()}] Starting confirmation sound...")
-                                self.audio_player.play(self.confirmation_sound_path, volume=1.0, block=False)
-                                print(f"[{datetime.now()}] Confirmation sound started")
-
                             # Start API call immediately
                             print(f"[{datetime.now()}] Starting API call...")
                             logging.info("Getting assistant response...")
@@ -304,14 +298,17 @@ class VoiceAssistant:
                             audio_data = self.ai_client.text_to_speech(response)
                             if audio_data:
                                 try:
+                                    # Stop any existing playback before starting new one
+                                    self.audio_player.stop()
+                                    # Small pause to let the audio system stabilize
+                                    time.sleep(0.1)
+                                    
                                     logging.info("Playing response...")
                                     self.audio_player.play(audio_data, block=True)  # Block for TTS
                                     logging.info("Response playback complete")
                                     
-                                    # Stop the confirmation sound as soon as we get the response
-                                    print(f"[{datetime.now()}] Stopping confirmation sound...")
-                                    self.audio_player.stop()
-                                    print(f"[{datetime.now()}] Confirmation sound stopped")
+                                    # Small pause before playing ready sound
+                                    time.sleep(0.1)
                                     
                                     # Play ready sound after TTS finishes
                                     if self.ready_sound_path and os.path.exists(self.ready_sound_path):
