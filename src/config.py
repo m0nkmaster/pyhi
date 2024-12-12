@@ -42,7 +42,7 @@ class AudioDeviceConfig:
     fallback_to_default: bool = True
         
     # Buffer settings
-    buffer_size_ms: int = 50  # Keep original for wake word detection
+    buffer_size_ms: int = 75  # Slightly increased for smoother transitions
     
     # Error handling
     retry_on_error: bool = True
@@ -95,7 +95,7 @@ class AudioConfig:
 class AudioPlayerConfig:
     temp_file: str = "temp_playback.mp3"
     activation_sound_path: str = "src/assets/bing.mp3"
-    volume_level: float = 1.0  # Set to maximum
+    volume_level: float = 0.9  # Slightly reduced to prevent clipping
     output_device_index: int | None = None
 
 @dataclass
