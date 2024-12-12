@@ -72,17 +72,17 @@ class PyAudioPlayer(AudioPlayer):
                     if self._command_exists('sox'):
                         # Use sox for better audio quality and transitions
                         cmd = ['play', '-q']
-                        # Add fade in/out to prevent popping
-                        cmd.extend(['--norm', '-V1'])
+                        # Remove normalization to reduce latency
+                        cmd.extend(['-V1'])
                         if volume != 1.0:
                             cmd.extend(['--volume', str(volume)])
                         cmd.extend([
                             audio_file,
-                            'fade', 't', '0.05', '0', '0.05'  # Add tiny fades
+                            'fade', 't', '0.01', '-0', '0.01'  # Reduce fade to 10ms
                         ])
                     elif self._command_exists('mpg123'):
                         # mpg123 fallback
-                        cmd = ['mpg123', '-q', '--rva-mix']  # Add ReplayGain mixing
+                        cmd = ['mpg123', '-q', '--rva-mix', '--no-control']  # Disable terminal control
                         if volume != 1.0:
                             vol_percent = min(100, int(volume * 100))
                             cmd.extend(['-f', str(vol_percent)])
@@ -90,11 +90,12 @@ class PyAudioPlayer(AudioPlayer):
                     else:
                         raise AudioPlayerError("No suitable audio player found (sox or mpg123 required)")
 
-                # Start playback
+                # Start playback with higher priority
                 self._current_process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
+                    stderr=subprocess.PIPE,
+                    preexec_fn=os.setsid if platform.system().lower() != 'darwin' else None
                 )
 
                 if block:
