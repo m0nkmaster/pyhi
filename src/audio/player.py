@@ -1,12 +1,13 @@
 import os
 import platform
-import subprocess
-import sys
 import threading
 import logging
 import time
 from typing import Optional, Callable, Union
 import pyaudio
+import wave
+import io
+from pydub import AudioSegment
 from ..utils.types import AudioPlayer
 from ..config import AudioPlayerConfig, AudioDeviceConfig
 
@@ -20,113 +21,108 @@ class PyAudioPlayer(AudioPlayer):
         self.config = config or AudioPlayerConfig()
         self.device_config = device_config
         self.on_error = on_error
-        self._current_process = None
+        self._pa = pyaudio.PyAudio()
+        self._stream = None
         self._lock = threading.Lock()
+        
+    def __del__(self):
+        """Cleanup PyAudio resources."""
+        if self._stream:
+            self._stream.stop_stream()
+            self._stream.close()
+        if self._pa:
+            self._pa.terminate()
 
-    def _command_exists(self, cmd: str) -> bool:
-        """Check if a command exists in the system."""
-        return any(
-            os.access(os.path.join(path, cmd), os.X_OK)
-            for path in os.environ["PATH"].split(os.pathsep)
-        )
-
-    def _wait_for_process(self, process, timeout=None):
-        """Wait for process to complete with timeout."""
-        try:
-            process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            process.terminate()
-            try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                process.kill()
+    def _convert_to_wav(self, audio_data: Union[str, bytes]) -> tuple[bytes, int, int, int, int]:
+        """Convert audio data to WAV format."""
+        if isinstance(audio_data, str):
+            # Load from file
+            audio = AudioSegment.from_file(audio_data)
+        else:
+            # Load from bytes
+            audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
+            
+        # Convert to WAV
+        wav_data = io.BytesIO()
+        audio.export(wav_data, format='wav')
+        wav_data.seek(0)
+        
+        # Read WAV parameters
+        with wave.open(wav_data, 'rb') as wav:
+            channels = wav.getnchannels()
+            width = wav.getsampwidth()
+            rate = wav.getframerate()
+            frames = wav.readframes(wav.getnframes())
+            
+        return frames, rate, channels, width, len(frames)
 
     def play(self, audio_data: Union[str, bytes], volume: float = 1.0, block: bool = True) -> None:
-        """Play an audio file or audio data."""
-        with self._lock:  # Ensure only one playback at a time
-            if self._current_process and self._current_process.poll() is None:
-                self._current_process.terminate()
-                self._wait_for_process(self._current_process, timeout=1)
-
+        """Play audio using native PyAudio."""
+        with self._lock:
             try:
-                system = platform.system().lower()
+                # Stop any existing playback
+                if self._stream and self._stream.is_active():
+                    self._stream.stop_stream()
+                    self._stream.close()
                 
-                # Handle file path vs bytes
-                temp_file = None
-                if isinstance(audio_data, bytes):
-                    temp_file = "temp_response.mp3"
-                    with open(temp_file, "wb") as f:
-                        f.write(audio_data)
-                    audio_file = temp_file
-                else:
-                    audio_file = audio_data
-                    if not os.path.exists(audio_file):
-                        raise AudioPlayerError(f"Audio file not found: {audio_file}")
-
-                # Set up command based on platform
-                if system == "darwin":  # macOS
-                    cmd = ['afplay', audio_file]
-                    if volume != 1.0:
-                        cmd.extend(['-v', str(volume)])
-                else:  # Linux/Raspberry Pi
-                    if self._command_exists('sox'):
-                        # Use sox for better audio quality and transitions
-                        cmd = ['play', '-q']
-                        # Remove normalization to reduce latency
-                        cmd.extend(['-V1'])
-                        if volume != 1.0:
-                            cmd.extend(['--volume', str(volume)])
-                        cmd.extend([
-                            audio_file,
-                            'fade', 't', '0.01', '-0', '0.01'  # Reduce fade to 10ms
-                        ])
-                    elif self._command_exists('mpg123'):
-                        # mpg123 fallback
-                        cmd = ['mpg123', '-q', '--rva-mix', '--no-control']  # Disable terminal control
-                        if volume != 1.0:
-                            vol_percent = min(100, int(volume * 100))
-                            cmd.extend(['-f', str(vol_percent)])
-                        cmd.append(audio_file)
-                    else:
-                        raise AudioPlayerError("No suitable audio player found (sox or mpg123 required)")
-
-                # Start playback with higher priority
-                self._current_process = subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    preexec_fn=os.setsid if platform.system().lower() != 'darwin' else None
+                # Convert audio to WAV format
+                frames, rate, channels, width, frame_count = self._convert_to_wav(audio_data)
+                
+                # Create a new stream
+                self._stream = self._pa.open(
+                    format=self._pa.get_format_from_width(width),
+                    channels=channels,
+                    rate=rate,
+                    output=True,
+                    output_device_index=self.config.output_device_index,
+                    start=False  # Don't start yet
                 )
-
+                
+                # Write data in chunks to prevent memory issues
+                chunk_size = 1024 * 4  # Larger chunks for smoother playback
+                offset = 0
+                
+                def play_audio():
+                    nonlocal offset
+                    try:
+                        self._stream.start_stream()
+                        while offset < len(frames):
+                            if not self._stream.is_active():
+                                break
+                            chunk = frames[offset:offset + chunk_size]
+                            if volume != 1.0:
+                                # Apply volume in-place
+                                chunk = b''.join(
+                                    int(b * volume).to_bytes(1, byteorder='little', signed=True)
+                                    for b in chunk
+                                )
+                            self._stream.write(chunk, exception_on_underflow=False)
+                            offset += chunk_size
+                    finally:
+                        self._stream.stop_stream()
+                        self._stream.close()
+                        self._stream = None
+                
                 if block:
-                    # Wait for playback to complete with a reasonable timeout
-                    self._wait_for_process(self._current_process, timeout=10)
+                    play_audio()
                 else:
-                    # Start a thread to prevent zombie processes
-                    threading.Thread(
-                        target=self._wait_for_process,
-                        args=(self._current_process, 10),
-                        daemon=True
-                    ).start()
-
+                    thread = threading.Thread(target=play_audio)
+                    thread.daemon = True
+                    thread.start()
+                    
             except Exception as e:
                 if self.on_error:
                     self.on_error(e)
                 logging.error(f"Error playing audio: {e}")
                 raise AudioPlayerError(f"Error playing audio: {e}")
-            finally:
-                if temp_file and os.path.exists(temp_file):
-                    try:
-                        os.remove(temp_file)
-                    except:
-                        pass
 
     def stop(self):
         """Stop any currently playing audio."""
-        if self._current_process and self._current_process.poll() is None:
-            self._current_process.terminate()
-            self._wait_for_process(self._current_process, timeout=1)
+        if self._stream and self._stream.is_active():
+            self._stream.stop_stream()
+            self._stream.close()
+            self._stream = None
 
     def is_playing(self) -> bool:
         """Check if audio is currently playing."""
-        return self._current_process and self._current_process.poll() is None
+        return self._stream is not None and self._stream.is_active()
