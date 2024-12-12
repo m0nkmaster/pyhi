@@ -8,6 +8,7 @@ import pyaudio
 import wave
 import io
 from pydub import AudioSegment
+import numpy as np
 from ..utils.types import AudioPlayer
 from ..config import AudioPlayerConfig, AudioDeviceConfig
 
@@ -16,7 +17,7 @@ class AudioPlayerError(Exception):
     pass
 
 class PyAudioPlayer(AudioPlayer):
-    def __init__(self, on_error: Optional[Callable[[Exception], None]] = None, config: Optional[AudioPlayerConfig] = None, device_config: Optional[AudioDeviceConfig] = None):
+    def __init__(self, config=None, device_config=None, on_error=None):
         """Initialize the audio player."""
         self.config = config or AudioPlayerConfig()
         self.device_config = device_config
@@ -24,37 +25,59 @@ class PyAudioPlayer(AudioPlayer):
         self._pa = pyaudio.PyAudio()
         self._stream = None
         self._lock = threading.Lock()
-        
+        self._current_thread = None
+        self._stop_requested = False
+        self._chunk_size = 1024 * 4
+        self._frames_per_buffer = 2048
+
     def __del__(self):
         """Cleanup PyAudio resources."""
-        if self._stream:
-            self._stream.stop_stream()
-            self._stream.close()
-        if self._pa:
-            self._pa.terminate()
+        self.stop()
+        if hasattr(self, '_pa'):
+            try:
+                self._pa.terminate()
+            except Exception as e:
+                logging.debug(f"Error terminating PyAudio: {e}")
 
-    def _convert_to_wav(self, audio_data: Union[str, bytes]) -> tuple[bytes, int, int, int, int]:
-        """Convert audio data to WAV format."""
-        if isinstance(audio_data, str):
-            # Load from file
-            audio = AudioSegment.from_file(audio_data)
-        else:
-            # Load from bytes
-            audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
+    def _convert_to_wav(self, audio_data):
+        """Convert audio data to WAV format with consistent parameters."""
+        try:
+            if isinstance(audio_data, str):
+                # Load from file
+                audio = AudioSegment.from_file(audio_data)
+            else:
+                # Raw audio data (assuming mp3 format from TTS)
+                audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
+
+            # Ensure consistent format
+            audio = audio.set_frame_rate(44100).set_channels(1).set_sample_width(2)
+            return audio.raw_data
             
-        # Convert to WAV
-        wav_data = io.BytesIO()
-        audio.export(wav_data, format='wav')
-        wav_data.seek(0)
-        
-        # Read WAV parameters
-        with wave.open(wav_data, 'rb') as wav:
-            channels = wav.getnchannels()
-            width = wav.getsampwidth()
-            rate = wav.getframerate()
-            frames = wav.readframes(wav.getnframes())
-            
-        return frames, rate, channels, width, len(frames)
+        except Exception as e:
+            logging.error(f"Error converting audio: {e}")
+            raise AudioPlayerError(f"Error converting audio: {e}")
+
+    def stop(self):
+        """Stop any currently playing audio."""
+        self._stop_requested = True
+        if self._stream:
+            try:
+                # Ignore PortAudio errors during cleanup
+                try:
+                    self._stream.stop_stream()
+                except OSError as e:
+                    if e.errno != -9986:  # Ignore expected PortAudio errors
+                        logging.debug(f"Error stopping stream: {e}")
+                
+                try:
+                    self._stream.close()
+                except OSError as e:
+                    if e.errno != -9986:  # Ignore expected PortAudio errors
+                        logging.debug(f"Error closing stream: {e}")
+            except Exception as e:
+                logging.debug(f"Error during stream cleanup: {e}")
+            finally:
+                self._stream = None
 
     def play(self, audio_data: Union[str, bytes], volume: float = 1.0, block: bool = True) -> None:
         """Play audio using native PyAudio."""
@@ -62,60 +85,54 @@ class PyAudioPlayer(AudioPlayer):
             try:
                 # Stop any existing playback
                 self.stop()
+                self._stop_requested = False
                 
-                # Convert audio to WAV format
-                frames, rate, channels, width, frame_count = self._convert_to_wav(audio_data)
+                # Convert audio to raw format
+                raw_data = self._convert_to_wav(audio_data)
                 
-                # Create a new stream
+                # Create stream
                 self._stream = self._pa.open(
-                    format=self._pa.get_format_from_width(width),
-                    channels=channels,
-                    rate=rate,
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=44100,
                     output=True,
-                    output_device_index=self.config.output_device_index,
-                    start=False,  # Don't start yet
-                    stream_callback=None,  # Use blocking mode for better stability
-                    frames_per_buffer=1024 * 4  # Larger buffer for stability
+                    frames_per_buffer=self._frames_per_buffer
                 )
                 
                 def play_audio():
                     try:
-                        # Pre-buffer some data before starting
-                        self._stream.start_stream()
-                        
                         # Write data in chunks
-                        chunk_size = 1024 * 4
-                        for i in range(0, len(frames), chunk_size):
-                            if not self._stream.is_active():
+                        chunk_size = self._chunk_size
+                        for i in range(0, len(raw_data), chunk_size):
+                            if self._stop_requested:
                                 break
                             
-                            chunk = frames[i:i + chunk_size]
+                            chunk = raw_data[i:i + chunk_size]
                             if not chunk:
                                 break
                                 
                             if volume != 1.0:
-                                # Apply volume in-place
-                                chunk = b''.join(
-                                    int(b * volume).to_bytes(1, byteorder='little', signed=True)
-                                    for b in chunk
-                                )
+                                # Apply volume adjustment
+                                chunk_array = np.frombuffer(chunk, dtype=np.int16)
+                                chunk_array = (chunk_array * volume).astype(np.int16)
+                                chunk = chunk_array.tobytes()
                             
-                            try:
+                            if self._stream and not self._stop_requested:
                                 self._stream.write(chunk, exception_on_underflow=False)
-                            except OSError as e:
-                                logging.error(f"Stream error: {e}")
-                                break
                                 
                     except Exception as e:
                         logging.error(f"Playback error: {e}")
+                        if self.on_error:
+                            self.on_error(e)
                     finally:
-                        try:
-                            if self._stream and self._stream.is_active():
+                        # Only stop the stream, don't try to join the thread
+                        if self._stream:
+                            try:
                                 self._stream.stop_stream()
                                 self._stream.close()
-                        except Exception as e:
-                            logging.error(f"Error closing stream: {e}")
-                        self._stream = None
+                            except:
+                                pass
+                            self._stream = None
                 
                 if block:
                     play_audio()
@@ -125,22 +142,11 @@ class PyAudioPlayer(AudioPlayer):
                     thread.start()
                     
             except Exception as e:
+                logging.error(f"Error playing audio: {e}")
                 if self.on_error:
                     self.on_error(e)
-                logging.error(f"Error playing audio: {e}")
+                self.stop()
                 raise AudioPlayerError(f"Error playing audio: {e}")
-
-    def stop(self):
-        """Stop any currently playing audio."""
-        if self._stream:
-            try:
-                if self._stream.is_active():
-                    self._stream.stop_stream()
-                self._stream.close()
-            except Exception as e:
-                logging.error(f"Error stopping stream: {e}")
-            finally:
-                self._stream = None
 
     def is_playing(self) -> bool:
         """Check if audio is currently playing."""
