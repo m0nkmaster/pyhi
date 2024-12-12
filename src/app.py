@@ -280,6 +280,13 @@ class VoiceAssistant:
                             # Add message to conversation history immediately
                             self.conversation_manager.add_user_message(transcript)
 
+                            # Start playing confirmation sound non-blocking while waiting for API
+                            confirmation_sound_path = get_sound_path(CONFIRMATION_SOUND)
+                            if os.path.exists(confirmation_sound_path):
+                                print(f"[{datetime.now()}] Starting confirmation sound...")
+                                self.audio_player.play(confirmation_sound_path, volume=0.5, block=False)
+                                print(f"[{datetime.now()}] Confirmation sound started")
+
                             # Start API call immediately
                             print(f"[{datetime.now()}] Starting API call...")
                             logging.info("Getting assistant response...")
@@ -291,37 +298,43 @@ class VoiceAssistant:
                             response = self.ai_client.get_completion(
                                 self.conversation_manager.get_conversation_history()
                             )
-                            print(f"[{datetime.now()}] Got API response")
+                            print(f"[{datetime.now()}] Got API response: {response}")
                             
-                            # Convert response to speech and play it
+                            # Convert response to speech
                             logging.info("Converting response to speech...")
+                            print(f"[{datetime.now()}] Converting to speech...")
                             audio_data = self.ai_client.text_to_speech(response)
+                            print(f"[{datetime.now()}] Got audio data, length: {len(audio_data)} bytes")
+                            
                             if audio_data:
-                                try:
-                                    # Stop any existing playback before starting new one
-                                    self.audio_player.stop()
-                                    # Small pause to let the audio system stabilize
-                                    time.sleep(0.1)
-                                    
-                                    logging.info("Playing response...")
-                                    self.audio_player.play(audio_data, block=True)  # Block for TTS
-                                    logging.info("Response playback complete")
-                                    
-                                    # Small pause before playing ready sound
-                                    time.sleep(0.1)
-                                    
-                                    # Play ready sound after TTS finishes
-                                    if self.ready_sound_path and os.path.exists(self.ready_sound_path):
-                                        print(f"[{datetime.now()}] Playing ready sound...")
-                                        self.audio_player.play(self.ready_sound_path, volume=1.0, block=True)
-                                        print(f"[{datetime.now()}] Ready sound complete")
-                                        print_with_emoji("Ready for your next question!", "👂")
-                                        
-                                    # Only update last interaction after all sounds are complete
-                                    self.last_interaction = datetime.now()
-                                    
-                                except AudioPlayerError as e:
-                                    logging.error(f"Error playing response: {e}")
+                                # Only stop confirmation sound when we're ready to play the response
+                                print(f"[{datetime.now()}] Stopping confirmation sound...")
+                                self.audio_player.stop()
+                                print(f"[{datetime.now()}] Confirmation sound stopped")
+                                
+                                # Small pause to let the audio system stabilize
+                                time.sleep(0.2)
+                                
+                                # Play the response
+                                print(f"[{datetime.now()}] Starting TTS playback")
+                                self.audio_player.play(audio_data, block=True)
+                                print(f"[{datetime.now()}] TTS playback complete")
+                                
+                                # Small pause before ready sound
+                                time.sleep(0.2)
+                                
+                                # Play ready sound
+                                if self.ready_sound_path and os.path.exists(self.ready_sound_path):
+                                    print(f"[{datetime.now()}] Playing ready sound...")
+                                    self.audio_player.play(self.ready_sound_path, volume=1.0, block=True)
+                                    print(f"[{datetime.now()}] Ready sound complete")
+                                    print_with_emoji("Ready for your next question!", "👂")
+                                
+                                # Only update last interaction after all sounds are complete
+                                self.last_interaction = datetime.now()
+                            else:
+                                logging.error("Failed to get audio data from TTS")
+                                print(f"[{datetime.now()}] No audio data received from TTS")
                         except sr.UnknownValueError:
                             logging.info("Could not understand audio")
                             print_with_emoji("Sorry, I couldn't understand that. Could you try again?", "🤔")

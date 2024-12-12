@@ -3,6 +3,7 @@ import pyaudio
 import os
 from dotenv import load_dotenv
 import platform
+from typing import Optional
 
 # Load environment variables from .env file
 load_dotenv()
@@ -97,6 +98,7 @@ class AudioPlayerConfig:
     activation_sound_path: str = "src/assets/bing.mp3"
     volume_level: float = 0.9  # Slightly reduced to prevent clipping
     output_device_index: int | None = None
+    output_device_name: Optional[str] = "Built-in Output"  # Default to Mac's built-in output
 
 @dataclass
 class ChatConfig:
