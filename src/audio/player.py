@@ -69,26 +69,26 @@ class PyAudioPlayer(AudioPlayer):
                     if volume != 1.0:
                         cmd.extend(['-v', str(volume)])
                 else:  # Linux/Raspberry Pi
-                    if self._command_exists('mpg123'):
-                        # mpg123 has better quality and volume control
-                        cmd = ['mpg123', '-q']
+                    if self._command_exists('sox'):
+                        # Use sox for better audio quality and transitions
+                        cmd = ['play', '-q']
+                        # Add fade in/out to prevent popping
+                        cmd.extend(['--norm', '-V1'])
                         if volume != 1.0:
-                            # mpg123 volume is in percentage (0-100)
+                            cmd.extend(['--volume', str(volume)])
+                        cmd.extend([
+                            audio_file,
+                            'fade', 't', '0.05', '0', '0.05'  # Add tiny fades
+                        ])
+                    elif self._command_exists('mpg123'):
+                        # mpg123 fallback
+                        cmd = ['mpg123', '-q', '--rva-mix']  # Add ReplayGain mixing
+                        if volume != 1.0:
                             vol_percent = min(100, int(volume * 100))
                             cmd.extend(['-f', str(vol_percent)])
                         cmd.append(audio_file)
-                    elif self._command_exists('aplay'):
-                        # aplay fallback with software volume control
-                        if volume != 1.0:
-                            if self._command_exists('sox'):
-                                cmd = ['sox', '-v', str(volume), audio_file, '-d']
-                            else:
-                                cmd = ['aplay', '-q', audio_file]
-                                logging.warning("Volume control not available without sox")
-                        else:
-                            cmd = ['aplay', '-q', audio_file]
                     else:
-                        raise AudioPlayerError("No suitable audio player found (mpg123 or aplay required)")
+                        raise AudioPlayerError("No suitable audio player found (sox or mpg123 required)")
 
                 # Start playback
                 self._current_process = subprocess.Popen(
