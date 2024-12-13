@@ -11,11 +11,25 @@ if not os.getenv("OPENAI_API_KEY"):
     raise ValueError("OPENAI_API_KEY not found in environment variables. Please check your .env file.")
 
 
+# Audio file paths relative to src/assets
+ACTIVATION_SOUND = "bing.mp3"
+CONFIRMATION_SOUND = "elevator.mp3"  
+READY_SOUND = "beep.mp3"
+SLEEP_SOUND = "bing-bong.mp3"  # Reusing activation sound for now
+
+# Base directory for audio assets
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+
+def get_sound_path(filename: str) -> str:
+    """Get the absolute path for a sound file in the assets directory."""
+    return os.path.join(ASSETS_DIR, filename)
+
+
 @dataclass
 class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 1.2
-    response_silence_threshold: float = 1.0
-    buffer_duration: float = 1.5
+    wake_word_silence_threshold: float = 0.5
+    response_silence_threshold: float = 2.0
+    buffer_duration: float = 1.0
 
 
 @dataclass
@@ -62,18 +76,19 @@ class SpeechDetectionConfig:
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 48000
+    sample_rate: int = 16000  # Required by Porcupine
     channels: int = 1
-    chunk_size: int = 512
-    format: int = pyaudio.paInt16
+    chunk_size: int = 1024     # Match Porcupine's frame length
+    format: int = pyaudio.paInt16  # 16-bit linear PCM
     input_device_index: int | None = None
     output_device_index: int | None = None
     device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
     speech_config: SpeechDetectionConfig = field(default_factory=SpeechDetectionConfig)
-
+    
     def __post_init__(self):
-        if self.chunk_size == 512:
-            self.chunk_size = int(self.sample_rate * (self.device_config.buffer_size_ms / 1000))
+        # Ensure chunk size matches Porcupine's frame length
+        if self.chunk_size != 1024:
+            print("Warning: chunk_size should be 1024 for Porcupine wake word detection")
 
 
 @dataclass
@@ -86,10 +101,10 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    model: str = "gpt-4-turbo"
+    model: str = "gpt-3.5-turbo"
     max_completion_tokens: int = 250
     temperature: float = 0.7
-    system_prompt: str = "You are a voice assistant in a lively household where people may occasionally ask you questions. Expect a mix of queries, including cooking tips, general knowledge, and advice. Respond quickly, clearly, and helpfully, keeping your answers concise and easy to understand."  # Added system prompt for brevity
+    system_prompt: str = "You are a voice assistant in a lively household. Keep your responses concise, clear, and under 2 sentences when possible. Be direct and helpful."
 
 
 @dataclass
@@ -100,11 +115,10 @@ class TTSConfig:
 
 @dataclass
 class WordDetectionConfig:
-    model: str = "whisper-1"
-    temperature: float = 0.0
-    language: str = "en"
-    min_audio_size: int = 4096
-    similarity_threshold: float = 0.75
+    # Debug options
+    debug_detection: bool = False
+    # Frame length in milliseconds
+    frame_length_ms: int = 512
 
 
 @dataclass
@@ -116,13 +130,6 @@ class AppConfig:
 
     def __post_init__(self):
         if self.words is None:
-            self.words = [
-                "hey chat", "hi chat", "hello chat",
-                "hey chatbot", "hi chatbot", "hello chatbot",
-                "chat", "chats", "hey chap", "hey chaps",
-                "hey Chad", "hi Chad", "hello Chad",
-                "hey Jack", "hey check", "hey chap",
-                "hey shot", "hay chat", "hey chair",
-                "hey that", "he chat", "hey chatty",
-                "hey chat bot", "hey chat!"
-            ]
+            # Use the Hey Chat wake word model for Mac
+            model_path = os.path.join(os.path.dirname(__file__), "assets", "Hey-Chat_en_mac_v3_0_0.ppn")
+            self.words = [model_path]
