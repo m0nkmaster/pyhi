@@ -1,0 +1,52 @@
+{
+    "name": "datetime_utils",
+    "description": "A collection of date and time utility functions that support natural language queries",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "function": {
+                "type": "string",
+                "enum": ["get_current_time", "get_current_date", "calculate_days_between", "days_until_date", "format_date", "time_until"],
+                "description": "The specific datetime function to call"
+            },
+            "timezone": {
+                "type": "string",
+                "description": "The timezone to use (e.g., 'UTC', 'America/New_York', 'Europe/London')",
+                "examples": ["UTC", "America/New_York", "Europe/London", "Asia/Tokyo"]
+            },
+            "target_time": {
+                "type": "string",
+                "description": "Target time in various formats (e.g., '2:30 pm', '14:30', '2pm')",
+                "examples": ["2:30 pm", "14:30", "2pm", "noon", "midnight"]
+            },
+            "start_date": {
+                "type": "string",
+                "description": "Start date in various formats (e.g., 'January 1, 2024', '2024-01-01', 'next Monday')",
+                "examples": ["2024-01-01", "January 1, 2024", "next Monday", "tomorrow"]
+            },
+            "end_date": {
+                "type": "string",
+                "description": "End date in various formats (e.g., 'December 31, 2024', '2024-12-31', 'next Friday')",
+                "examples": ["2024-12-31", "December 31, 2024", "next Friday", "in 3 days"]
+            },
+            "target_date": {
+                "type": "string",
+                "description": "Target date in various formats (e.g., 'Christmas', 'next week', '2024-12-25')",
+                "examples": ["Christmas", "next week", "2024-12-25", "tomorrow"]
+            },
+            "date": {
+                "type": "string",
+                "description": "Date to format in various formats",
+                "examples": ["2024-01-01", "January 1, 2024", "tomorrow", "next Monday"]
+            },
+            "format": {
+                "type": "string",
+                "enum": ["natural", "default", "full", "short", "iso", "custom"],
+                "description": "Format to use for output. 'natural' gives conversational responses.",
+                "default": "natural"
+            }
+        },
+        "required": ["function"],
+        "additionalProperties": false
+    }
+} 

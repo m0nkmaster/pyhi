@@ -1,6 +1,7 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from openai import OpenAI
 from dataclasses import dataclass
+import logging
 
 @dataclass
 class ChatConfig:
@@ -18,7 +19,8 @@ class OpenAIWrapper:
         self,
         client: OpenAI,
         chat_config: Optional[ChatConfig] = None,
-        tts_config: Optional[TTSConfig] = None
+        tts_config: Optional[TTSConfig] = None,
+        function_manager=None
     ):
         """
         Initialize the OpenAI wrapper.
@@ -27,10 +29,12 @@ class OpenAIWrapper:
             client: OpenAI client instance
             chat_config: Configuration for chat completion
             tts_config: Configuration for text-to-speech
+            function_manager: Function manager for function calling support
         """
         self.client = client
         self.chat_config = chat_config or ChatConfig()
         self.tts_config = tts_config or TTSConfig()
+        self.function_manager = function_manager
     
     def get_chat_completion(self, messages: List[Dict[str, str]]) -> Optional[str]:
         """
@@ -43,16 +47,31 @@ class OpenAIWrapper:
             Optional[str]: The assistant's response or None if the request failed
         """
         try:
+            # Get available tools from function manager
+            tools = self.function_manager.get_tools() if self.function_manager else None
+            
             response = self.client.chat.completions.create(
                 model=self.chat_config.model,
                 messages=messages,
+                tools=tools,
+                tool_choice="auto",
                 max_completion_tokens=self.chat_config.max_completion_tokens,
                 temperature=self.chat_config.temperature
             )
-            return response.choices[0].message.content
+            message = response.choices[0].message
+            
+            # Format response consistently
+            return {
+                "content": message.content,
+                "tool_calls": message.tool_calls if hasattr(message, "tool_calls") else None
+            }
+            
         except Exception as e:
-            print(f"Error getting chat completion: {e}")
-            return None
+            logging.error(f"Error getting chat completion: {str(e)}")
+            return {
+                "content": "I encountered an error processing your request.",
+                "tool_calls": None
+            }
     
     def text_to_speech(self, text: str, output_file: str = "response.mp3") -> Optional[bytes]:
         """
@@ -74,13 +93,11 @@ class OpenAIWrapper:
             response = self.client.audio.speech.create(
                 model=self.tts_config.model,
                 voice=self.tts_config.voice,
-                input=text,
-                speed=1.2,  # Slightly faster playback
-                response_format="mp3"  # Explicit format
+                input=text
             )
             
             # Get audio data directly in memory
-            audio_data = response.read()
+            audio_data = response.content
             
             # Save to file for backup/debugging
             with open(output_file, "wb") as f:
@@ -89,5 +106,5 @@ class OpenAIWrapper:
             return audio_data
             
         except Exception as e:
-            print(f"Error converting text to speech: {e}")
+            logging.error(f"Error converting text to speech: {str(e)}")
             return None
