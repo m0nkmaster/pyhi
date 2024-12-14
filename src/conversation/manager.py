@@ -1,8 +1,22 @@
-from typing import List, Optional
-from dataclasses import dataclass, field
-from ..utils.types import ConversationManager
+# Standard library imports
 import json
 import logging
+from datetime import datetime
+from typing import List, Optional
+from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo
+import platform
+import socket
+
+# Third-party imports
+try:
+    import requests
+except ImportError:
+    logging.error("requests package not found. Please install it with: pip install requests")
+    requests = None
+
+# Local imports
+from ..utils.types import ConversationManager
 
 @dataclass
 class Message:
@@ -43,14 +57,88 @@ class ChatConversationManager(ConversationManager):
             system_prompt: Optional custom system prompt
             function_manager: Optional function manager for handling function calls
         """
-        self.conversation = Conversation(
-            system_prompt=system_prompt or Conversation.system_prompt
-        )
-        self.function_manager = function_manager
-        # Add system message at initialization
-        self.conversation.messages.append(
-            Message(role="system", content=self.conversation.system_prompt)
-        )
+        try:
+            # Get current context
+            current_time = datetime.now()
+            timezone = self._get_timezone()
+            if timezone:
+                current_time = current_time.astimezone(ZoneInfo(timezone))
+            
+            # Format date and time
+            formatted_date = current_time.strftime("%A, %B %d, %Y")
+            formatted_time = current_time.strftime("%I:%M %p")
+            
+            # Get location information
+            location = self._get_location()
+            
+            # Format the system prompt with current context
+            try:
+                formatted_prompt = (system_prompt or Conversation.system_prompt).format(
+                    current_date=formatted_date,
+                    current_time=formatted_time,
+                    location=location,
+                    timezone=timezone or "UTC"
+                )
+                logging.debug(f"Formatted system prompt: {formatted_prompt}")
+            except KeyError as e:
+                logging.warning(f"Missing placeholder in system prompt: {e}")
+                formatted_prompt = system_prompt or Conversation.system_prompt
+            except Exception as e:
+                logging.warning(f"Error formatting system prompt: {e}")
+                formatted_prompt = system_prompt or Conversation.system_prompt
+            
+            self.conversation = Conversation(
+                system_prompt=formatted_prompt
+            )
+            self.function_manager = function_manager
+            
+            # Add system message at initialization
+            self.conversation.messages.append(
+                Message(role="system", content=self.conversation.system_prompt)
+            )
+            
+        except Exception as e:
+            logging.error(f"Error initializing conversation manager: {e}")
+            # Fall back to default prompt if initialization fails
+            self.conversation = Conversation(
+                system_prompt=Conversation.system_prompt
+            )
+            self.function_manager = function_manager
+            self.conversation.messages.append(
+                Message(role="system", content=self.conversation.system_prompt)
+            )
+    
+    def _get_timezone(self) -> Optional[str]:
+        """Get the system's timezone."""
+        try:
+            return datetime.now().astimezone().tzname()
+        except Exception as e:
+            logging.warning(f"Could not determine timezone: {e}")
+            return None
+    
+    def _get_location(self) -> str:
+        """Get the approximate location based on IP address."""
+        if not requests:
+            logging.warning("requests package not available, using fallback location")
+            return f"Location of {socket.gethostname()}"
+        
+        try:
+            # First try to get public IP
+            response = requests.get('https://api.ipify.org?format=json', timeout=5)
+            if response.status_code == 200:
+                ip = response.json()['ip']
+                
+                # Then get location from IP
+                response = requests.get(f'https://ipapi.co/{ip}/json/', timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    return f"{data.get('city', 'Unknown City')}, {data.get('region', 'Unknown Region')}, {data.get('country_name', 'Unknown Country')}"
+            
+            # Fallback to hostname
+            return f"Location of {socket.gethostname()}"
+        except Exception as e:
+            logging.warning(f"Could not determine location: {e}")
+            return "Unknown Location"
     
     def add_user_message(self, message: str) -> None:
         """
@@ -138,7 +226,7 @@ class ChatConversationManager(ConversationManager):
         """
         if not isinstance(response, dict):
             return str(response)
-            
+        
         # Get initial message content and tool calls
         message = response.get("content") or ""  # Ensure content is never None
         tool_calls = response.get("tool_calls", [])
@@ -176,46 +264,21 @@ class ChatConversationManager(ConversationManager):
                         logging.error(f"Failed to parse function arguments: {e}")
                         continue
                     
-                    logging.info(f"Executing function call: {function_name} with arguments: {arguments}")
-                    result = self.function_manager.call_function(function_name, **arguments)
-                    logging.info(f"Function call result: {result}")
+                    # Call the function with unpacked arguments
+                    function_response = self.function_manager.call_function(function_name, **arguments)
                     
-                    # Format result as a string if it's a dict
-                    result_content = json.dumps(result) if isinstance(result, dict) else str(result)
-                    
-                    # Safely get tool_call_id
-                    tool_call_id = getattr(tool_call, 'id', None)
-                    logging.debug(f"Function result: {result_content}")
-                    logging.debug(f"tool_call_id: {tool_call_id}")
-                    
-                    # Add function result to conversation
+                    # Add the tool response message immediately after the assistant message
                     self.conversation.messages.append(
                         Message(
-                            role="tool",  # Changed from 'function' to 'tool' to match OpenAI's schema
+                            role="tool",
                             name=function_name,
-                            content=result_content,
-                            tool_call_id=tool_call_id
+                            content=function_response,
+                            tool_call_id=tool_call.id
                         )
                     )
                     
-                    # Update message based on function result
-                    if result:
-                        if isinstance(result, dict):
-                            message = f"{json.dumps(result, indent=2)}"
-                        else:
-                            message = f"{result}"
-                
                 except Exception as e:
-                    error_msg = f"Error executing function {function_name}: {str(e)}"
-                    logging.error(error_msg)
-                    message = f"I encountered an error while processing your request: {str(e)}"
-            
-            # Add a final assistant message with the processed result
-            self.conversation.messages.append(
-                Message(
-                    role="assistant",
-                    content=message
-                )
-            )
+                    logging.error(f"Error processing tool call: {e}")
+                    continue
         
-        return message if message else "I'll help you with that."
+        return message
