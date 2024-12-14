@@ -4,9 +4,17 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Dict, Union, Any
 import re
-from dateutil import parser
-from dateutil.relativedelta import relativedelta
 import calendar
+
+# Try to import dateutil with proper error handling
+try:
+    from dateutil import parser
+    from dateutil.relativedelta import relativedelta
+except ImportError:
+    raise ImportError(
+        "python-dateutil is required for date parsing functionality. "
+        "Please install it with: pip install python-dateutil"
+    )
 
 # Default timezone
 DEFAULT_TIMEZONE = "UTC"
@@ -56,6 +64,15 @@ SEASONAL_CONTEXTS = {
     "summer": ((6, 1), (8, 31), "during summer"),
     "fall": ((9, 1), (11, 30), "during fall"),
     "winter": ((12, 1), (2, 28), "during winter")
+}
+
+# Date format templates
+FORMAT_TEMPLATES = {
+    "default": "%Y-%m-%d",
+    "full": "%A, %B %d, %Y",
+    "short": "%b %d, %Y",
+    "iso": "%Y-%m-%dT%H:%M:%S",
+    "custom": None  # Will be replaced by the format parameter if provided
 }
 
 def parse_time(time_str: str) -> Union[datetime, None]:
@@ -446,7 +463,9 @@ def format_date(date: str, format: str = "natural") -> Dict[str, str]:
                 
             return {"description": response}
         else:
-            format_str = format_templates.get(format, format_templates["default"])
+            format_str = FORMAT_TEMPLATES.get(format, FORMAT_TEMPLATES["default"])
+            if format == "custom" and isinstance(format, str):
+                format_str = format
             return {
                 "formatted_date": date_obj.strftime(format_str),
                 "original_date": date,
@@ -454,6 +473,65 @@ def format_date(date: str, format: str = "natural") -> Dict[str, str]:
             }
     except Exception as e:
         return {"error": f"I couldn't format that date: {str(e)}"}
+
+def days_until_date(target_date: str, format: str = "natural") -> Dict[str, Union[int, str]]:
+    """Calculate days until a specific date with enhanced natural language."""
+    try:
+        target = parse_date(target_date)
+        if not target:
+            return {"error": "I don't understand that date format"}
+            
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        days_remaining = (target.date() - today.date()).days
+        
+        if format == "natural":
+            target_season = get_seasonal_context(target)
+            
+            if days_remaining < 0:
+                if days_remaining == -1:
+                    response = "That was yesterday"
+                elif days_remaining > -7:
+                    response = f"That was {abs(days_remaining)} days ago"
+                elif days_remaining > -30:
+                    weeks = abs(days_remaining) // 7
+                    response = f"That was {weeks} {'week' if weeks == 1 else 'weeks'} ago"
+                else:
+                    months = abs(days_remaining) // 30
+                    response = f"That was about {months} {'month' if months == 1 else 'months'} ago"
+            elif days_remaining == 0:
+                response = "That's today"
+            elif days_remaining == 1:
+                response = f"That's tomorrow {target_season}"
+            elif days_remaining < 7:
+                day_name = target.strftime("%A")
+                response = f"That's this coming {day_name} {target_season}"
+            elif days_remaining < 14:
+                day_name = target.strftime("%A")
+                response = f"That's next {day_name} {target_season}"
+            elif days_remaining < 30:
+                weeks = days_remaining // 7
+                response = f"That's in {weeks} {'week' if weeks == 1 else 'weeks'} {target_season}"
+            else:
+                months = days_remaining // 30
+                response = f"That's in about {months} {'month' if months == 1 else 'months'} {target_season}"
+            
+            # Add special date context if applicable
+            date_str = target.strftime("%B %d")
+            for name, special_date in COMMON_DATES.items():
+                if special_date.lower() == date_str.lower():
+                    response += f" (it's {name.title()}!)"
+                    break
+                    
+            return {"description": response.strip()}
+        else:
+            return {
+                "days_remaining": days_remaining,
+                "target_date": target.strftime("%Y-%m-%d"),
+                "current_date": today.strftime("%Y-%m-%d")
+            }
+            
+    except Exception as e:
+        return {"error": f"I couldn't calculate that date: {str(e)}"}
 
 def implementation(function: str, **kwargs) -> Dict[str, Any]:
     """Main implementation function that routes to the appropriate datetime function."""
