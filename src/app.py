@@ -72,10 +72,11 @@ class VoiceAssistant:
         # Initialize AI client with function manager
         self.ai_client = AIWrapper(ai_config, self.function_manager)
         
-        # Initialize conversation manager with function manager
+        # Initialize conversation manager with function manager and AI client
         self.conversation_manager = ChatConversationManager(
             system_prompt=ChatConfig().system_prompt,
-            function_manager=self.function_manager
+            function_manager=self.function_manager,
+            ai_client=self.ai_client
         )
         
         # Warn about speech recognition limitations
@@ -314,6 +315,11 @@ class VoiceAssistant:
                             
                             # Process the response and handle any function calls
                             text_response = self.conversation_manager.process_assistant_response(response)
+                            
+                            # Skip TTS if response is empty
+                            if not text_response or len(text_response.strip()) == 0:
+                                logging.warning("Empty text response received from AI, skipping TTS")
+                                continue
                             
                             # Convert text response to speech
                             logging.info("Converting response to speech...")

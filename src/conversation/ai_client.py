@@ -118,12 +118,26 @@ class AIWrapper:
 
     def text_to_speech(self, text: str) -> Optional[bytes]:
         """Convert text to speech using OpenAI's TTS."""
+        # Validate input text
+        if not text or not isinstance(text, str) or not text.strip():
+            logging.warning("Invalid or empty text provided to text_to_speech, skipping TTS conversion")
+            return None
+
+        # Ensure text is properly stripped and has content
+        text = text.strip()
+        if len(text) < 1:
+            logging.warning("Text is too short for TTS conversion")
+            return None
+        
         try:
             response = self.openai_client.audio.speech.create(
                 model=self.config.voice_model,
                 voice=self.config.voice,
                 input=text
             )
+            if not response or not response.content:
+                logging.error("Empty response received from TTS API")
+                return None
             return response.content
         except Exception as e:
             logging.error(f"Error converting text to speech: {str(e)}")
