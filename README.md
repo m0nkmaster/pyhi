@@ -85,8 +85,9 @@ pyhi/
 │   │   ├── player.py      # Audio playback
 │   │   └── recorder.py    # Audio recording
 │   ├── conversation/      # Chat functionality
-│   │   ├── manager.py     # Conversation management
-│   │   └── openai_client.py # OpenAI API integration
+│   │   ├── __init__.py
+│   │   ├── ai_client.py     # AI service integration (OpenAI, Anthropic)
+│   │   └── manager.py       # Conversation state management
 │   ├── utils/            # Utility functions
 │   │   ├── audio_setup.py  # Audio device configuration
 │   │   ├── list_devices.py # Device enumeration utilities
