@@ -1,0 +1,41 @@
+{
+  "name": "manage_calendar",
+  "description": "Manage Google Calendar events - add, delete, or view calendar events",
+  "parameters": {
+      "type": "object",
+      "properties": {
+          "action": {
+              "type": "string",
+              "enum": ["add_event", "delete_event", "view_calendar"],
+              "description": "The calendar action to perform"
+          },
+          "event": {
+              "type": "object",
+              "properties": {
+                  "summary": {
+                      "type": "string",
+                      "description": "Title of the event"
+                  },
+                  "description": {
+                      "type": "string",
+                      "description": "Description of the event"
+                  },
+                  "start_time": {
+                      "type": "string",
+                      "description": "Start time in ISO format (YYYY-MM-DDTHH:MM:SS)"
+                  },
+                  "end_time": {
+                      "type": "string",
+                      "description": "End time in ISO format (YYYY-MM-DDTHH:MM:SS)"
+                  },
+                  "event_id": {
+                      "type": "string",
+                      "description": "Event ID (required for delete_event)"
+                  }
+              },
+              "required": ["summary", "start_time", "end_time"]
+          }
+      },
+      "required": ["action"]
+  }
+}

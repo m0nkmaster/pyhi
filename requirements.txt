@@ -10,3 +10,6 @@ pydub
 tzdata>=2023.3
 python-dateutil>=2.8.2
 requests>=2.31.0
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
