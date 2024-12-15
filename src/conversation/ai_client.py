@@ -1,19 +1,30 @@
-from typing import Optional, List
-import os
+"""OpenAI and Anthropic API client wrapper."""
+
+from typing import Optional, List, Dict, Any
+import logging
 from openai import OpenAI
 from anthropic import Anthropic
 
 class AIWrapper:
-    def __init__(self, config):
-        """Initialize the AI wrapper with configuration."""
+    def __init__(self, config, function_manager=None):
+        """
+        Initialize the AI wrapper.
+        
+        Args:
+            config: Configuration object with API keys and settings
+            function_manager: Optional function manager for function calling
+        """
         self.config = config
+        self.function_manager = function_manager
         self.openai_client = OpenAI(api_key=config.openai_api_key)
         self.anthropic_client = Anthropic(api_key=config.anthropic_api_key)
         self.chat_provider = config.chat_provider
         self.chat_model = config.chat_model
 
-    def get_completion(self, messages: List[dict]) -> str:
+    def get_completion(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion based on the configured chat_provider."""
+        # Log the messages being sent to the API
+        logging.debug(f"Sending messages to API: {messages}")
         if self.chat_provider == "openai":
             return self._get_completion_openai(messages)
         elif self.chat_provider == "claude":
@@ -21,44 +32,99 @@ class AIWrapper:
         else:
             raise ValueError(f"Unsupported AI chat_provider: {self.chat_provider}")
 
-    def _get_completion_openai(self, messages: List[dict]) -> str:
+    def _get_completion_openai(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion from OpenAI."""
-        response = self.openai_client.chat.completions.create(
-            model=self.chat_model,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=150
-        )
-        return response.choices[0].message.content
+        try:
+            # Get available tools from function manager
+            tools = self.function_manager.get_tools() if self.function_manager else None
+            
+            # Validate tools format
+            if tools:
+                logging.debug(f"Using tools: {tools}")
+                if not isinstance(tools, list):
+                    logging.error("Tools must be a list")
+                    tools = None
+                else:
+                    # Validate each tool has required properties
+                    for tool in tools:
+                        if not isinstance(tool, dict) or 'type' not in tool or 'function' not in tool:
+                            logging.error(f"Invalid tool format: {tool}")
+                            tools = None
+                            break
+            
+            # Make API call with improved configuration
+            response = self.openai_client.chat.completions.create(
+                model=self.chat_model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",  # Let the model decide when to call functions
+                temperature=0.7,
+                max_tokens=500,  # Increased to allow for function responses
+                n=1,  # Ensure we only get one completion
+            )
+            
+            # Extract response
+            message = response.choices[0].message
+            
+            # Format response consistently
+            formatted_response = {
+                "content": message.content,
+                "tool_calls": None
+            }
+            
+            # Safely handle tool calls if present
+            if hasattr(message, 'tool_calls') and message.tool_calls:
+                formatted_response["tool_calls"] = message.tool_calls
+                logging.debug(f"Tool calls in response: {message.tool_calls}")
+            
+            return formatted_response
+            
+        except Exception as e:
+            logging.error(f"Error getting OpenAI completion: {str(e)}")
+            return {
+                "content": f"I encountered an error processing your request: {str(e)}",
+                "tool_calls": None
+            }
 
-    def _get_completion_anthropic(self, messages: List[dict]) -> str:
+    def _get_completion_anthropic(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion from Anthropic's Claude."""
-        # Extract system message and user messages
-        system_message = next((msg['content'] for msg in messages if msg['role'] == 'system'), None)
-        user_messages = [
-            {"role": "user", "content": msg['content']}
-            for msg in messages if msg['role'] == 'user'
-        ]
-        
-        response = self.anthropic_client.messages.create(
-            model=self.chat_model,
-            system=system_message,
-            messages=user_messages,
-            max_tokens=150
-        )
-        return response.content[0].text
+        try:
+            # Extract system message and user messages
+            system_message = next((msg['content'] for msg in messages if msg['role'] == 'system'), None)
+            user_messages = [
+                {"role": "user", "content": msg['content']}
+                for msg in messages if msg['role'] == 'user'
+            ]
+            
+            response = self.anthropic_client.messages.create(
+                model=self.chat_model,
+                system=system_message,
+                messages=user_messages,
+                max_tokens=150
+            )
+            
+            # Format response consistently
+            return {
+                "content": response.content[0].text,
+                "tool_calls": None  # Anthropic doesn't support function calling yet
+            }
+            
+        except Exception as e:
+            logging.error(f"Error getting Anthropic completion: {str(e)}")
+            return {
+                "content": "I encountered an error processing your request.",
+                "tool_calls": None
+            }
 
     def text_to_speech(self, text: str) -> Optional[bytes]:
-        """Convert text to speech using OpenAI's TTS (always uses OpenAI regardless of chat_provider)."""
+        """Convert text to speech using OpenAI's TTS."""
         try:
             response = self.openai_client.audio.speech.create(
                 model=self.config.voice_model,
                 voice=self.config.voice,
                 input=text
             )
-            
             return response.content
-            
         except Exception as e:
-            print(f"Error converting text to speech: {e}")
+            logging.error(f"Error converting text to speech: {str(e)}")
             return None

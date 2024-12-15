@@ -102,7 +102,15 @@ class AudioPlayerConfig:
 
 @dataclass
 class ChatConfig:
-    system_prompt: str = "You are a voice assistant in a lively household. Keep your responses concise, clear, and under 2 sentences when possible. Be direct and helpful."
+    system_prompt: str = """You are a voice assistant in a lively household. Keep your responses concise, clear, and under 2 sentences when possible. Be direct and helpful.
+
+Current Context:
+- Current Date: {current_date}
+- Current Time: {current_time}
+- Location: {location}
+- Timezone: {timezone}
+
+Use this context to provide more relevant and timely responses. For example, consider the time of day when making suggestions or the current season for relevant recommendations."""
 
 @dataclass
 class WordDetectionConfig:
@@ -121,7 +129,7 @@ class AIConfig:
     #chat_provider: str = "claude"  
     #chat_model: str = "claude-3-opus-20240229"
     chat_provider: str = "openai"  
-    chat_model: str = "gpt-3.5-turbo"
+    chat_model: str = "gpt-4o-mini"
     max_completion_tokens: int = 250
     temperature: float = 0.7
 

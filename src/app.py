@@ -11,8 +11,19 @@ import queue
 import signal
 import sys
 
-from .conversation.ai_client import AIWrapper
+# Set up logging configuration
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("ai_assistant.log"),
+        logging.StreamHandler()
+    ]
+)
 
+from .conversation.ai_client import AIWrapper
+from .conversation.manager import ChatConversationManager
+from .function_manager import FunctionManager
 from .config import (
     AppConfig,
     AudioConfig,
@@ -26,8 +37,6 @@ from .config import (
 from .audio.player import PyAudioPlayer, AudioPlayerError
 from .audio.recorder import PyAudioRecorder, AudioRecorderError
 from .word_detection.detector import PorcupineWakeWordDetector
-from .conversation.manager import ChatConversationManager
-from .conversation.openai_client import OpenAIWrapper
 from .config import (
     ACTIVATION_SOUND,
     CONFIRMATION_SOUND,
@@ -56,9 +65,19 @@ class VoiceAssistant:
         # Instantiate AIConfig
         ai_config = AIConfig()
         
-        # Initialize the AI wrapper
-        self.ai_client = AIWrapper(ai_config)
-
+        # Initialize the function manager
+        self.function_manager = FunctionManager("src/functions")
+        logging.info("Function manager initialized successfully!")
+        
+        # Initialize AI client with function manager
+        self.ai_client = AIWrapper(ai_config, self.function_manager)
+        
+        # Initialize conversation manager with function manager
+        self.conversation_manager = ChatConversationManager(
+            system_prompt=ChatConfig().system_prompt,
+            function_manager=self.function_manager
+        )
+        
         # Warn about speech recognition limitations
         print_with_emoji("Note: Using free Google Speech Recognition API (limited to ~50 requests/day)", "ℹ️")
         logging.warning("Using free Google Speech Recognition API with daily request limits")
@@ -75,13 +94,6 @@ class VoiceAssistant:
             logging.error(f"Error initializing wake word detector: {e}")
             print_with_emoji(f"Error initializing wake word detector: {e}", "❌")
             raise
-
-        # Initialize conversation manager
-        self.conversation_manager = ChatConversationManager(
-            system_prompt=ChatConfig().system_prompt
-        )
-        logging.info("Conversation manager initialized successfully!")
-        print_with_emoji("Conversation manager initialized successfully!", "✅")
 
         self.setup_audio_system()
         self.load_activation_sound()
@@ -300,10 +312,13 @@ class VoiceAssistant:
                             )
                             print(f"[{datetime.now()}] Got API response: {response}")
                             
-                            # Convert response to speech
+                            # Process the response and handle any function calls
+                            text_response = self.conversation_manager.process_assistant_response(response)
+                            
+                            # Convert text response to speech
                             logging.info("Converting response to speech...")
                             print(f"[{datetime.now()}] Converting to speech...")
-                            audio_data = self.ai_client.text_to_speech(response)
+                            audio_data = self.ai_client.text_to_speech(text_response)
                             print(f"[{datetime.now()}] Got audio data, length: {len(audio_data)} bytes")
                             
                             if audio_data:
@@ -355,7 +370,7 @@ class VoiceAssistant:
     def _listen_for_trigger_word(self) -> bool:
         """Listen for trigger word activation."""
         # Only log at debug level for continuous operations
-        logging.debug("Listening for trigger word...")
+        # logging.debug("Listening for trigger word...")
         audio_data = self.audio_recorder.record_chunk()
         
         if not audio_data:
