@@ -49,13 +49,14 @@ class Conversation:
     system_prompt: str = "You are a helpful assistant. Please respond in English."
 
 class ChatConversationManager(ConversationManager):
-    def __init__(self, system_prompt: Optional[str] = None, function_manager=None):
+    def __init__(self, system_prompt: Optional[str] = None, function_manager=None, ai_client=None):
         """
         Initialize the conversation manager.
         
         Args:
             system_prompt: Optional custom system prompt
             function_manager: Optional function manager for handling function calls
+            ai_client: AI client instance for making API calls
         """
         try:
             # Get current context
@@ -91,6 +92,7 @@ class ChatConversationManager(ConversationManager):
                 system_prompt=formatted_prompt
             )
             self.function_manager = function_manager
+            self.ai_client = ai_client
             
             # Add system message at initialization
             self.conversation.messages.append(
@@ -104,6 +106,7 @@ class ChatConversationManager(ConversationManager):
                 system_prompt=Conversation.system_prompt
             )
             self.function_manager = function_manager
+            self.ai_client = ai_client
             self.conversation.messages.append(
                 Message(role="system", content=self.conversation.system_prompt)
             )
@@ -267,7 +270,7 @@ class ChatConversationManager(ConversationManager):
                     # Call the function with unpacked arguments
                     function_response = self.function_manager.call_function(function_name, **arguments)
                     
-                    # Add the tool response message immediately after the assistant message
+                    # Add the tool response message to conversation history
                     self.conversation.messages.append(
                         Message(
                             role="tool",
@@ -280,5 +283,24 @@ class ChatConversationManager(ConversationManager):
                 except Exception as e:
                     logging.error(f"Error processing tool call: {e}")
                     continue
+            
+            # Make a second API call to get the natural language response
+            try:
+                if not self.ai_client:
+                    logging.error("No AI client available for second API call")
+                    return "I apologize, but I encountered an issue processing the data. Could you please try again?"
+                    
+                second_response = self.ai_client.get_completion(self.get_conversation_history())
+                
+                if isinstance(second_response, dict):
+                    message = second_response.get("content", "")
+                    if not message or not message.strip():
+                        message = "I apologize, but I encountered an issue processing the data. Could you please try again?"
+                else:
+                    message = str(second_response)
+                
+            except Exception as e:
+                logging.error(f"Error getting second response: {e}")
+                message = "I apologize, but I encountered an issue processing the data. Could you please try again?"
         
-        return message
+        return message.strip()

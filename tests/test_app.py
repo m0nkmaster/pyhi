@@ -132,13 +132,22 @@ class TestVoiceAssistant:
 class TestAIIntegration:
     def test_conversation_manager_initialization(self):
         """Test conversation manager initialization"""
-        manager = ChatConversationManager()
+        # Create mock AI client
+        mock_ai_client = Mock()
+        mock_ai_client.get_completion.return_value = {"content": "Test response"}
+        
+        manager = ChatConversationManager(ai_client=mock_ai_client)
         assert len(manager.conversation.messages) == 1  # System prompt
         assert manager.conversation.messages[0].role == "system"
+        assert manager.ai_client == mock_ai_client
 
     def test_add_user_message(self):
         """Test adding user message to conversation"""
-        manager = ChatConversationManager()
+        # Create mock AI client
+        mock_ai_client = Mock()
+        mock_ai_client.get_completion.return_value = {"content": "Test response"}
+        
+        manager = ChatConversationManager(ai_client=mock_ai_client)
         test_message = "Hello, assistant!"
         manager.add_user_message(test_message)
         assert len(manager.conversation.messages) == 2
@@ -147,7 +156,11 @@ class TestAIIntegration:
 
     def test_add_assistant_message(self):
         """Test adding assistant message to conversation"""
-        manager = ChatConversationManager()
+        # Create mock AI client
+        mock_ai_client = Mock()
+        mock_ai_client.get_completion.return_value = {"content": "Test response"}
+        
+        manager = ChatConversationManager(ai_client=mock_ai_client)
         test_message = "Hello, user!"
         manager.add_assistant_message(test_message)
         assert len(manager.conversation.messages) == 2
@@ -156,7 +169,11 @@ class TestAIIntegration:
 
     def test_get_conversation_history(self):
         """Test retrieving conversation history"""
-        manager = ChatConversationManager()
+        # Create mock AI client
+        mock_ai_client = Mock()
+        mock_ai_client.get_completion.return_value = {"content": "Test response"}
+        
+        manager = ChatConversationManager(ai_client=mock_ai_client)
         user_message = "Hello, assistant!"
         assistant_message = "Hello, user!"
         manager.add_user_message(user_message)
