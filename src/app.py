@@ -56,56 +56,42 @@ class VoiceAssistant:
         self.recognizer.dynamic_energy_threshold = True  # Enable dynamic energy threshold
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-        logging.info("Initializing VoiceAssistant...")
-        print_with_emoji("Initializing VoiceAssistant...", "🤖")
+        
+        # Only log essential initialization
+        logging.info("API: Initializing voice assistant services")
+        
         self.audio_recorder = PyAudioRecorder(AudioConfig())
         self.words = words
         self.timeout_seconds = timeout_seconds or 10.0  # Set default timeout
 
-        # Instantiate AIConfig
+        # Initialize components
         ai_config = AIConfig()
-        
-        # Initialize the function manager
         self.function_manager = FunctionManager("src/functions")
-        logging.info("Function manager initialized successfully!")
-        
-        # Initialize AI client with function manager
         self.ai_client = AIWrapper(ai_config, self.function_manager)
-        
-        # Initialize conversation manager with function manager and AI client
         self.conversation_manager = ChatConversationManager(
             system_prompt=ChatConfig().system_prompt,
             function_manager=self.function_manager,
             ai_client=self.ai_client
         )
-        
-        # Warn about speech recognition limitations
-        print_with_emoji("Note: Using free Google Speech Recognition API (limited to ~50 requests/day)", "ℹ️")
-        logging.warning("Using free Google Speech Recognition API with daily request limits")
 
-        # Initialize wake word detector with Porcupine
         try:
             self.word_detector = PorcupineWakeWordDetector(
                 config=WordDetectionConfig(),
                 audio_config=AudioConfig()
             )
-            logging.info("Wake word detector initialized successfully!")
-            print_with_emoji("Wake word detector initialized successfully!", "✅")
         except ValueError as e:
-            logging.error(f"Error initializing wake word detector: {e}")
-            print_with_emoji(f"Error initializing wake word detector: {e}", "❌")
+            logging.error(f"Wake word detector initialization failed: {e}")
             raise
 
+        # Initialize remaining components
         self.setup_audio_system()
         self.load_activation_sound()
         self.load_confirmation_sound()
         self.load_ready_sound()
         self.load_sleep_sound()
 
-        # Initialize state
         self.is_awake = False
-        self.last_interaction: Optional[datetime] = None
-
+        self.last_interaction = None
         self.response_queue = queue.Queue()
 
     def setup_audio_system(self):
@@ -311,7 +297,7 @@ class VoiceAssistant:
                             response = self.ai_client.get_completion(
                                 self.conversation_manager.get_conversation_history()
                             )
-                            print(f"[{datetime.now()}] Got API response: {response}")
+                            logging.info(f"API Response: {response}")
                             
                             # Process the response and handle any function calls
                             text_response = self.conversation_manager.process_assistant_response(response)
@@ -357,17 +343,13 @@ class VoiceAssistant:
                                 logging.error("Failed to get audio data from TTS")
                                 print(f"[{datetime.now()}] No audio data received from TTS")
                         except sr.UnknownValueError:
-                            logging.info("Could not understand audio")
+                            logging.error("Speech recognition failed: Could not understand audio")
                             print_with_emoji("Sorry, I couldn't understand that. Could you try again?", "🤔")
                         except sr.RequestError as e:
-                            if "recognition request failed" in str(e):
-                                logging.error("Daily limit for free Google Speech Recognition may have been reached")
-                                print_with_emoji("Speech recognition limit reached. Consider upgrading to Google Cloud Speech API", "⚠️")
-                            else:
-                                logging.error(f"Could not request results; {e}")
-                                print_with_emoji("Speech recognition error. Please try again.", "❌")
+                            logging.error(f"Speech recognition request failed: {e}")
+                            print_with_emoji("Speech recognition error. Please try again.", "❌")
                 except Exception as e:
-                    logging.error(f"Error processing audio: {e}")
+                    logging.error(f"Processing error: {e}")
         except Exception as e:
             logging.error(f"Error running voice assistant: {e}")
         finally:
