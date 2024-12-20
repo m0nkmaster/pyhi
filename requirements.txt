@@ -13,3 +13,5 @@ requests>=2.31.0
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
+zeep>=4.2.1
+requests

@@ -1,0 +1,31 @@
+diff --git a/recording.wav b/recording.wav
+deleted file mode 100644
+index 5052d40..0000000
+Binary files a/recording.wav and /dev/null differ
+diff --git a/requirements.txt b/requirements.txt
+index 431345f..13fe9b8 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -10,3 +10,6 @@ pydub
+ tzdata>=2023.3
+ python-dateutil>=2.8.2
+ requests>=2.31.0
++google-auth-oauthlib
++google-auth-httplib2
++google-api-python-client
+diff --git a/src/functions/ideas.txt b/src/functions/ideas.txt
+index 5628312..55d54ff 100644
+--- a/src/functions/ideas.txt
++++ b/src/functions/ideas.txt
+@@ -1,5 +1,5 @@
+-Calendar integration
+-Email integration
+-Phone integration
+-Weather integration
+-Alarms
+\ No newline at end of file
++[ x ] Calendar integration
++[ ] Email integration
++[ ] Phone integration
++[ x ] Weather integration
++[ ] Alarms

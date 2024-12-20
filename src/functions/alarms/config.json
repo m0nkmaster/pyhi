@@ -1,0 +1,28 @@
+{
+  "name": "manage_alarms",
+  "description": "Set, list, or delete alarms and timers",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["set_alarm", "set_timer", "list_alarms", "delete_alarm"],
+        "description": "The action to perform"
+      },
+      "time": {
+        "type": "string",
+        "description": "For alarms: Time in HH:MM format (24-hour). For timers: Duration in minutes or HH:MM format"
+      },
+      "label": {
+        "type": "string",
+        "description": "Optional label/description for the alarm or timer"
+      },
+      "alarm_id": {
+        "type": "string",
+        "description": "ID of the alarm to delete (required for delete_alarm action)"
+      }
+    },
+    "required": ["action"],
+    "additionalProperties": false
+  }
+} 
