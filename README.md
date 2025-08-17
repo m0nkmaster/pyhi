@@ -25,7 +25,7 @@ The system is designed for **simplicity and extensibility** - add new capabiliti
 
 ### **Installation**
 ```bash
-git clone <repository>
+git clone git@github.com:m0nkmaster/pyhi.git
 cd pyhi
 pip install -r requirements.txt
 ```
