@@ -1,5 +1,0 @@
-Calendar integration
-Email integration
-Phone integration
-Weather integration
-Alarms

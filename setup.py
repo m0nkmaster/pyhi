@@ -10,7 +10,7 @@ setup(
         "python-dotenv>=0.19.0",
         "pyaudio>=0.2.11",
         "numpy>=1.21.0",
-        "SpeechRecognition",  # Added for speech recognition
+        "SpeechRecognition",
         "aifc",  # Required by SpeechRecognition
     ],
     extras_require={

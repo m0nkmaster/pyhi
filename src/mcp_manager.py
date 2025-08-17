@@ -39,9 +39,7 @@ class MCPManager:
         
         self.logger.info(f"Initializing MCPManager with {len(config.servers)} servers")
         
-        if config.enabled and config.auto_start:
-            # We can't run async from __init__, so we'll defer connection to a separate method
-            pass
+        # Initialization will be done via the initialize() method
 
     async def initialize(self) -> None:
         """Initialize and connect to all enabled MCP servers."""

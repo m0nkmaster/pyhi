@@ -1,116 +1,114 @@
 import pytest
+import asyncio
 from unittest.mock import Mock, patch
-import numpy as np
-import os
-import tempfile
-from src.word_detection.detector import PorcupineWakeWordDetector
-from src.config import WordDetectionConfig, AudioConfig
+from src.wake_word import WakeWordDetector
+from src.config import Config
+
+
+@pytest.fixture
+def config():
+    return Config()
+
 
 @pytest.fixture
 def mock_porcupine():
-    with patch('pvporcupine.create') as mock:
+    """Mock Porcupine instance"""
+    with patch('pvporcupine.create') as mock_create:
         mock_instance = Mock()
         mock_instance.frame_length = 512
-        mock.return_value = mock_instance
+        mock_instance.process.return_value = -1  # No wake word by default
+        mock_instance.delete = Mock()
+        mock_create.return_value = mock_instance
         yield mock_instance
 
-@pytest.fixture
-def word_detection_config(tmp_path):
-    config = WordDetectionConfig()
-    # Create a temporary file to use as model
-    model_file = tmp_path / "test_model.ppn"
-    model_file.write_bytes(b"dummy model data")
-    config.model_path = str(model_file)
-    return config
 
-@pytest.fixture
-def audio_config():
-    return AudioConfig()
+class TestWakeWordDetectorCompat:
+    """Compatibility tests for wake word detection - mirrors original test structure"""
+    
+    def test_initialization_success(self, config, mock_porcupine):
+        """Test successful initialization"""
+        with patch.dict('os.environ', {'PICOVOICE_API_KEY': 'test_key'}):
+            detector = WakeWordDetector(config)
+            assert detector.config == config
+            assert detector.porcupine == mock_porcupine
 
-class TestPorcupineWakeWordDetector:
-    def test_initialization_success(self, mock_porcupine, word_detection_config, monkeypatch):
-        # Mock environment variable and os.path.exists
-        monkeypatch.setenv("PICOVOICE_API_KEY", "test_key")
-        
-        detector = PorcupineWakeWordDetector(word_detection_config)
-        assert detector.config == word_detection_config
-        assert detector.porcupine == mock_porcupine
 
-    def test_initialization_no_api_key(self, mock_porcupine, word_detection_config, monkeypatch):
-        # Ensure environment variable is not set
-        monkeypatch.delenv("PICOVOICE_API_KEY", raising=False)
-        
-        with pytest.raises(ValueError) as exc_info:
-            PorcupineWakeWordDetector(word_detection_config)
-        assert str(exc_info.value) == "PICOVOICE_API_KEY environment variable not set"
+    def test_initialization_no_api_key(self, config):
+        """Test initialization failure without API key"""
+        with patch.dict('os.environ', {}, clear=True):
+            with pytest.raises(ValueError, match="PICOVOICE_API_KEY environment variable not set"):
+                WakeWordDetector(config)
 
-    def test_initialization_no_model_file(self, mock_porcupine, word_detection_config, monkeypatch):
-        # Mock environment variable but make model file not exist
-        monkeypatch.setenv("PICOVOICE_API_KEY", "test_key")
-        word_detection_config.model_path = "/nonexistent/path/model.ppn"
-        
-        with pytest.raises(RuntimeError) as exc_info:
-            PorcupineWakeWordDetector(word_detection_config)
-        assert "Failed to initialize Porcupine: Model file not found at /nonexistent/path/model.ppn" in str(exc_info.value)
 
-    def test_detect_wake_word_found(self, mock_porcupine, word_detection_config, monkeypatch):
-        # Mock environment and file existence
-        monkeypatch.setenv("PICOVOICE_API_KEY", "test_key")
+    def test_initialization_no_model_file(self, config):
+        """Test initialization failure with missing model file"""
+        config.wake_word.model_path = "/nonexistent/path/model.ppn"
         
-        # Set up mock to indicate wake word found
-        mock_porcupine.process.return_value = 0
-        mock_porcupine.frame_length = 512
-        
-        detector = PorcupineWakeWordDetector(word_detection_config)
-        
-        # Create test audio data
-        audio_data = np.zeros(512, dtype=np.int16).tobytes()
-        
-        result = detector.detect(audio_data)
-        assert result is True
-        mock_porcupine.process.assert_called_once()
+        with patch.dict('os.environ', {'PICOVOICE_API_KEY': 'test_key'}):
+            with pytest.raises(RuntimeError, match="Failed to initialize Porcupine"):
+                WakeWordDetector(config)
 
-    def test_detect_no_wake_word(self, mock_porcupine, word_detection_config, monkeypatch):
-        # Mock environment and file existence
-        monkeypatch.setenv("PICOVOICE_API_KEY", "test_key")
-        
-        # Set up mock to indicate no wake word found
-        mock_porcupine.process.return_value = -1
-        mock_porcupine.frame_length = 512
-        
-        detector = PorcupineWakeWordDetector(word_detection_config)
-        
-        # Create test audio data
-        audio_data = np.zeros(512, dtype=np.int16).tobytes()
-        
-        result = detector.detect(audio_data)
-        assert result is False
-        mock_porcupine.process.assert_called_once()
 
-    def test_detect_error_handling(self, mock_porcupine, word_detection_config, monkeypatch):
-        # Mock environment and file existence
-        monkeypatch.setenv("PICOVOICE_API_KEY", "test_key")
+    @patch('pyaudio.PyAudio')
+    def test_detect_wake_word_found(self, mock_pyaudio, config, mock_porcupine):
+        """Test wake word detection when word is found"""
+        # Set up mocks
+        mock_porcupine.process.return_value = 0  # Wake word detected
         
-        # Set up mock to raise an exception
+        mock_pa = Mock()
+        mock_pyaudio.return_value = mock_pa
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 1024
+        mock_pa.open.return_value = mock_stream
+        
+        with patch.dict('os.environ', {'PICOVOICE_API_KEY': 'test_key'}):
+            detector = WakeWordDetector(config)
+            result = detector.detect()
+            
+            assert result is True
+            mock_porcupine.process.assert_called()
+
+
+    @patch('pyaudio.PyAudio')
+    def test_detect_no_wake_word(self, mock_pyaudio, config, mock_porcupine):
+        """Test when no wake word is detected"""
+        mock_porcupine.process.return_value = -1  # No wake word
+        
+        mock_pa = Mock()
+        mock_pyaudio.return_value = mock_pa
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 1024
+        mock_pa.open.return_value = mock_stream
+        
+        with patch.dict('os.environ', {'PICOVOICE_API_KEY': 'test_key'}):
+            detector = WakeWordDetector(config)
+            result = detector.detect()
+            
+            assert result is False
+
+
+    @patch('pyaudio.PyAudio')
+    def test_detect_error_handling(self, mock_pyaudio, config, mock_porcupine):
+        """Test error handling during detection"""
         mock_porcupine.process.side_effect = Exception("Test error")
-        mock_porcupine.frame_length = 512
         
-        detector = PorcupineWakeWordDetector(word_detection_config)
+        mock_pa = Mock()
+        mock_pyaudio.return_value = mock_pa
+        mock_stream = Mock()
+        mock_stream.read.return_value = b'\x00' * 1024
+        mock_pa.open.return_value = mock_stream
         
-        # Create test audio data
-        audio_data = np.zeros(512, dtype=np.int16).tobytes()
-        
-        result = detector.detect(audio_data)
-        assert result is False  # Should return False on error
-        mock_porcupine.process.assert_called_once()
+        with patch.dict('os.environ', {'PICOVOICE_API_KEY': 'test_key'}):
+            detector = WakeWordDetector(config)
+            result = detector.detect()
+            
+            assert result is False  # Should return False on error
 
-    def test_cleanup(self, mock_porcupine, word_detection_config, monkeypatch):
-        # Mock environment and file existence
-        monkeypatch.setenv("PICOVOICE_API_KEY", "test_key")
-        
-        detector = PorcupineWakeWordDetector(word_detection_config)
-        
-        # Call __del__ explicitly to test cleanup
-        detector.__del__()
-        
-        mock_porcupine.delete.assert_called_once()
+
+    def test_cleanup(self, config, mock_porcupine):
+        """Test cleanup functionality"""
+        with patch.dict('os.environ', {'PICOVOICE_API_KEY': 'test_key'}):
+            detector = WakeWordDetector(config)
+            detector.cleanup()
+            
+            mock_porcupine.delete.assert_called_once()

@@ -19,21 +19,21 @@ class AIWrapper:
         self.config = config
         self.function_manager = function_manager  # Legacy support
         self.mcp_manager = mcp_manager  # New MCP support
-        self.openai_client = OpenAI(api_key=config.openai_api_key)
-        self.anthropic_client = Anthropic(api_key=config.anthropic_api_key)
-        self.chat_provider = config.chat_provider
-        self.chat_model = config.chat_model
+        self.openai_client = OpenAI(api_key=config.api_key)
+        self.anthropic_client = Anthropic(api_key=config.api_key)
+        self.provider = config.provider
+        self.model = config.model
 
     def get_completion(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion based on the configured chat_provider."""
         # Log the messages being sent to the API
         logging.debug(f"Sending messages to API: {messages}")
-        if self.chat_provider == "openai":
+        if self.provider == "openai":
             return self._get_completion_openai(messages)
-        elif self.chat_provider == "claude":
+        elif self.provider == "anthropic":
             return self._get_completion_anthropic(messages)
         else:
-            raise ValueError(f"Unsupported AI chat_provider: {self.chat_provider}")
+            raise ValueError(f"Unsupported AI provider: {self.provider}")
 
     def _get_completion_openai(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion from OpenAI."""
@@ -61,7 +61,7 @@ class AIWrapper:
             
             # Make API call with improved configuration
             response = self.openai_client.chat.completions.create(
-                model=self.chat_model,
+                model=self.model,
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",  # Let the model decide when to call functions
@@ -104,7 +104,7 @@ class AIWrapper:
             ]
             
             response = self.anthropic_client.messages.create(
-                model=self.chat_model,
+                model=self.model,
                 system=system_message,
                 messages=user_messages,
                 max_tokens=150

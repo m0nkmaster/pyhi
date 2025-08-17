@@ -1,0 +1,1 @@
+"""Google Calendar MCP Server for PyHi voice assistant."""

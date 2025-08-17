@@ -1,0 +1,61 @@
+# PyHi Voice Assistant Configuration
+# Environment variables can be referenced using ${VARIABLE_NAME} syntax
+
+# Audio system settings
+audio:
+  input_device: "default"
+  output_device: "default"
+  sample_rate: 16000
+  channels: 1
+  chunk_size: 1024
+  
+  # Speech detection settings
+  speech_threshold: 200.0
+  silence_duration: 2.0
+  
+  # Audio feedback files
+  activation_sound: "bing.mp3"
+  confirmation_sound: "elevator.mp3"
+  ready_sound: "beep.mp3"
+  sleep_sound: "bing-bong.mp3"
+
+# AI provider configuration
+ai:
+  provider: "openai"  # "openai" or "anthropic"
+  model: "gpt-4o-mini"
+  api_key: "${OPENAI_API_KEY}"
+  voice: "nova"
+  voice_model: "tts-1"
+  max_tokens: 250
+  temperature: 0.7
+
+# MCP (Model Context Protocol) server configuration
+mcp:
+  enabled: true
+  transport: "stdio"
+  timeout: 30
+  servers:
+    - name: "weather"
+      command: ["python", "-m", "src.mcp_servers.weather"]
+      enabled: true
+    - name: "alarms"
+      command: ["python", "-m", "src.mcp_servers.alarms"]
+      enabled: true
+    - name: "train_times"
+      command: ["python", "-m", "src.mcp_servers.train_times"]
+      enabled: true
+    - name: "calendar"
+      command: ["python", "-m", "src.mcp_servers.calendar"]
+      enabled: true
+    - name: "streaming"
+      command: ["python", "-m", "src.mcp_servers.streaming"]
+      enabled: true
+
+# Wake word detection settings
+wake_word:
+  phrase: "Hey Chat"
+  model_path: ""  # Auto-detected based on platform
+
+# Application settings
+timeout_seconds: 10.0
+debug: false

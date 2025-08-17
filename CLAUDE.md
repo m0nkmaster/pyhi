@@ -102,3 +102,4 @@ The system supports multiple AI providers through `AIWrapper`:
 - Function implementations must have an `execute(args: dict) -> dict` method
 - Platform-specific wake word models (.ppn files) are required for different operating systems
 - All temporary audio files are automatically cleaned up on exit
+- Use Conventional Commits for version control

@@ -17,7 +17,7 @@ except ImportError:
     requests = None
 
 # Local imports
-from ..utils.types import ConversationManager
+# ConversationManager is defined in this file
 
 @dataclass
 class Message:
@@ -49,7 +49,7 @@ class Conversation:
     messages: List[Message] = field(default_factory=list)
     system_prompt: str = "You are a helpful assistant. Please respond in English."
 
-class ChatConversationManager(ConversationManager):
+class ChatConversationManager:
     def __init__(self, system_prompt: Optional[str] = None, function_manager=None, mcp_manager=None, ai_client=None):
         """
         Initialize the conversation manager.

@@ -1,186 +1,303 @@
-from dataclasses import dataclass, field
-import pyaudio
-import os
-from dotenv import load_dotenv
-import platform
-from typing import Optional, List, Dict, Any
+"""
+Simplified configuration system for PyHi voice assistant.
+Single unified configuration with YAML support and environment variable integration.
+"""
 
-# Load environment variables from .env file
+import os
+import platform
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional
+from pathlib import Path
+
+import yaml
+from dotenv import load_dotenv
+
+# Load environment variables
 load_dotenv()
 
-# Verify API key is present
-if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("OPENAI_API_KEY not found in environment variables. Please check your .env file.")
 
-# Audio file paths relative to src/assets
-ACTIVATION_SOUND = "bing.mp3"
-CONFIRMATION_SOUND = "elevator.mp3"  
-READY_SOUND = "beep.mp3"
-SLEEP_SOUND = "bing-bong.mp3"  # Reusing activation sound for now
-
-# Base directory for audio assets
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
-
-def get_sound_path(filename: str) -> str:
-    """Get the absolute path for a sound file in the assets directory."""
-    return os.path.join(ASSETS_DIR, filename)
-
-
-@dataclass
-class AudioRecorderConfig:
-    wake_word_silence_threshold: float = 0.5
-    response_silence_threshold: float = 2.0
-    buffer_duration: float = 1.0
-
-
-@dataclass
-class AudioDeviceConfig:
-    # Device selection
-    auto_select_device: bool = True
-    preferred_input_device_name: str | None = "Jabra Speak2"  # More specific match
-    preferred_output_device_name: str | None = "Jabra Speak2"
-    excluded_device_names: list[str] = field(default_factory=lambda: ["BlackHole", "ZoomAudioDevice"])
-    fallback_to_default: bool = True
-        
-    # Buffer settings
-    buffer_size_ms: int = 75  # Slightly increased for smoother transitions
-    
-    # Error handling
-    retry_on_error: bool = True
-    max_retries: int = 3
-    
-    # Debug options
-    list_devices_on_start: bool = True
-    debug_audio: bool = False  # Set to False by default for production
-
-
-@dataclass
-class SpeechDetectionConfig:
-    # Base threshold for speech detection
-    base_threshold: int = 1000
-    
-    # Multipliers for different checks
-    loudness_multiplier: float = 1.2
-    background_noise_multiplier: float = 2.0
-    signal_to_noise_threshold: float = 3.0
-    magnitude_multiplier: float = 2.5
-    variation_multiplier: float = 1.2
-    rms_multiplier: float = 1.5
-    
-    # Frequency range for speech
-    min_speech_freq: int = 85
-    max_speech_freq: int = 3000
-    
-    # Variation threshold divisor
-    variation_divisor: float = 2.0
+def expand_env_vars(value: str) -> str:
+    """Expand environment variables in configuration values."""
+    if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+        env_var = value[2:-1]
+        return os.getenv(env_var, "")
+    return value
 
 
 @dataclass
 class AudioConfig:
-    sample_rate: int = 16000  # Required by Porcupine
-    channels: int = 1         # Required for wake word detection
-    chunk_size: int = 1024    # Match Porcupine's frame length
-    format: int = pyaudio.paInt16
-    input_device_index: int | None = None
-    output_device_index: int | None = None
-    device_config: AudioDeviceConfig = field(default_factory=AudioDeviceConfig)
-    speech_config: SpeechDetectionConfig = field(default_factory=SpeechDetectionConfig)
+    """Audio system configuration."""
+    input_device: str = "default"
+    output_device: str = "default"
+    sample_rate: int = 16000
+    channels: int = 1
+    chunk_size: int = 1024
+    
+    # Speech detection settings
+    speech_threshold: float = 200.0
+    silence_duration: float = 2.0
+    
+    # Audio files
+    activation_sound: str = "bing.mp3"
+    confirmation_sound: str = "elevator.mp3"
+    ready_sound: str = "beep.mp3"
+    sleep_sound: str = "bing-bong.mp3"
 
-    def __post_init__(self):
-        # Ensure chunk size matches Porcupine's frame length
-        if self.chunk_size != 1024:
-            print("Warning: chunk_size should be 1024 for Porcupine wake word detection")
-
-
-@dataclass
-class AudioPlayerConfig:
-    temp_file: str = "temp_playback.mp3"
-    activation_sound_path: str = "src/assets/bing.mp3"
-    volume_level: float = 0.9  # Slightly reduced to prevent clipping
-    output_device_index: int | None = None
-    output_device_name: Optional[str] = "Built-in Output"  # Default to Mac's built-in output
-
-@dataclass
-class ChatConfig:
-    system_prompt: str = """You are a voice assistant in a lively household. Keep your responses concise, clear, and under 2 sentences when possible. Be direct and helpful.
-
-Current Context:
-- Current Date: {current_date}
-- Current Time: {current_time}
-- Location: {location}
-- Timezone: {timezone}
-
-Use this context to provide more relevant and timely responses. For example, consider the time of day when making suggestions or the current season for relevant recommendations."""
-
-@dataclass
-class WordDetectionConfig:
-    model_path = os.path.join(
-        os.path.dirname(__file__), 
-        "assets",
-        "Hey-Chat_en_mac_v3_0_0.ppn" if platform.system().lower() == 'darwin' else "Hey-Chat_en_raspberry-pi_v3_0_0.ppn"
-    )
 
 @dataclass
 class AIConfig:
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    anthropic_api_key: str = field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", ""))# Options: 'openai', 'claude'
+    """AI provider configuration."""
+    provider: str = "openai"  # "openai" or "anthropic"
+    model: str = "gpt-4o-mini"
+    api_key: str = ""
     voice: str = "nova"
     voice_model: str = "tts-1"
-    #chat_provider: str = "claude"  
-    #chat_model: str = "claude-3-opus-20240229"
-    chat_provider: str = "openai"  
-    chat_model: str = "gpt-4o-mini"
-    max_completion_tokens: int = 250
+    max_tokens: int = 250
     temperature: float = 0.7
+    
+    def __post_init__(self):
+        """Expand environment variables in API key."""
+        if self.api_key:
+            self.api_key = expand_env_vars(self.api_key)
+
 
 @dataclass
 class MCPServerConfig:
     """Configuration for a single MCP server."""
     name: str
-    executable: str  # Path to server executable
-    args: List[str] = field(default_factory=list)
-    env: Dict[str, str] = field(default_factory=dict)
+    command: List[str]
     enabled: bool = True
+    env: Dict[str, str] = field(default_factory=dict)
+
 
 @dataclass
 class MCPConfig:
-    """Configuration for MCP (Model Context Protocol) integration."""
-    enabled: bool = False  # Temporarily disabled for testing
-    transport: str = "stdio"  # "stdio" or "http"
+    """MCP system configuration."""
+    enabled: bool = True
+    transport: str = "stdio"
     timeout: int = 30
-    auto_start: bool = True
-    servers: List[MCPServerConfig] = field(default_factory=lambda: [
-        MCPServerConfig(
-            name="weather",
-            executable="python",
-            args=["-m", "src.mcp_servers.weather"],
-            env={}
-        ),
-        MCPServerConfig(
-            name="calendar",
-            executable="python", 
-            args=["-m", "src.mcp_servers.calendar"],
-            env={}
-        ),
-        MCPServerConfig(
-            name="alarms",
-            executable="python",
-            args=["-m", "src.mcp_servers.alarms"],
-            env={}
-        ),
-        MCPServerConfig(
-            name="train_times",
-            executable="python",
-            args=["-m", "src.mcp_servers.train_times"],
-            env={}
-        ),
-    ])
+    servers: List[MCPServerConfig] = field(default_factory=list)
+
 
 @dataclass
-class AppConfig:
+class WakeWordConfig:
+    """Wake word detection configuration."""
+    phrase: str = "Hey Chat"
+    model_path: str = ""
+    
+    def __post_init__(self):
+        """Set platform-specific model path if not provided."""
+        if not self.model_path:
+            assets_dir = Path(__file__).parent / "assets"
+            if platform.system().lower() == 'darwin':
+                self.model_path = str(assets_dir / "Hey-Chat_en_mac_v3_0_0.ppn")
+            else:
+                self.model_path = str(assets_dir / "Hey-Chat_en_raspberry-pi_v3_0_0.ppn")
+
+
+@dataclass
+class Config:
+    """Main PyHi configuration."""
+    audio: AudioConfig = field(default_factory=AudioConfig)
+    ai: AIConfig = field(default_factory=AIConfig)
+    mcp: MCPConfig = field(default_factory=MCPConfig)
+    wake_word: WakeWordConfig = field(default_factory=WakeWordConfig)
+    
+    # App settings
     timeout_seconds: float = 10.0
-    words: list[str] | None = None
-    temp_recording_path: str = "recording.wav"
-    temp_response_path: str = "response.mp3"
-    ai_config: AIConfig = field(default_factory=AIConfig)
-    mcp_config: MCPConfig = field(default_factory=MCPConfig)
+    debug: bool = False
+    
+    @classmethod
+    def load(cls, config_path: Optional[str] = None) -> 'Config':
+        """
+        Load configuration from YAML file with environment variable support.
+        
+        Args:
+            config_path: Path to YAML config file, defaults to 'config.yaml'
+            
+        Returns:
+            Config instance
+        """
+        if config_path is None:
+            config_path = "config.yaml"
+        
+        # Start with default configuration
+        config_data = {}
+        
+        # Load from YAML file if it exists
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                yaml_data = yaml.safe_load(f)
+                if yaml_data:
+                    config_data = yaml_data
+        
+        # Create config with defaults, then update with loaded data
+        config = cls()
+        
+        # Update audio config
+        if 'audio' in config_data:
+            audio_data = config_data['audio']
+            for key, value in audio_data.items():
+                if hasattr(config.audio, key):
+                    setattr(config.audio, key, value)
+        
+        # Update AI config
+        if 'ai' in config_data:
+            ai_data = config_data['ai']
+            for key, value in ai_data.items():
+                if hasattr(config.ai, key):
+                    if isinstance(value, str):
+                        value = expand_env_vars(value)
+                    setattr(config.ai, key, value)
+        
+        # Update MCP config
+        if 'mcp' in config_data:
+            mcp_data = config_data['mcp']
+            
+            # Basic MCP settings
+            for key in ['enabled', 'transport', 'timeout']:
+                if key in mcp_data:
+                    setattr(config.mcp, key, mcp_data[key])
+            
+            # MCP servers
+            if 'servers' in mcp_data:
+                config.mcp.servers = []
+                for server_data in mcp_data['servers']:
+                    server = MCPServerConfig(
+                        name=server_data['name'],
+                        command=server_data['command'],
+                        enabled=server_data.get('enabled', True),
+                        env=server_data.get('env', {})
+                    )
+                    config.mcp.servers.append(server)
+        
+        # Update wake word config
+        if 'wake_word' in config_data:
+            wake_word_data = config_data['wake_word']
+            for key, value in wake_word_data.items():
+                if hasattr(config.wake_word, key):
+                    setattr(config.wake_word, key, value)
+        
+        # Update app settings
+        app_settings = ['timeout_seconds', 'debug']
+        for setting in app_settings:
+            if setting in config_data:
+                setattr(config, setting, config_data[setting])
+        
+        # Validate required settings
+        config._validate()
+        
+        return config
+    
+    def _validate(self) -> None:
+        """Validate configuration settings."""
+        # Check for required API keys
+        if not self.ai.api_key:
+            if self.ai.provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+                raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY environment variable.")
+            elif self.ai.provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
+                raise ValueError("Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable.")
+        
+        # Check wake word model file (skip check if path is empty, will auto-detect)
+        if self.wake_word.model_path and not os.path.exists(self.wake_word.model_path):
+            raise ValueError(f"Wake word model not found at {self.wake_word.model_path}")
+        
+        # Validate audio settings
+        if self.audio.sample_rate != 16000:
+            print("Warning: Sample rate should be 16000 for optimal wake word detection")
+    
+    def save(self, config_path: str = "config.yaml") -> None:
+        """
+        Save configuration to YAML file.
+        
+        Args:
+            config_path: Path to save YAML config file
+        """
+        config_dict = {
+            'audio': {
+                'input_device': self.audio.input_device,
+                'output_device': self.audio.output_device,
+                'sample_rate': self.audio.sample_rate,
+                'channels': self.audio.channels,
+                'chunk_size': self.audio.chunk_size,
+                'speech_threshold': self.audio.speech_threshold,
+                'silence_duration': self.audio.silence_duration,
+                'activation_sound': self.audio.activation_sound,
+                'confirmation_sound': self.audio.confirmation_sound,
+                'ready_sound': self.audio.ready_sound,
+                'sleep_sound': self.audio.sleep_sound,
+            },
+            'ai': {
+                'provider': self.ai.provider,
+                'model': self.ai.model,
+                'api_key': '${OPENAI_API_KEY}' if self.ai.provider == 'openai' else '${ANTHROPIC_API_KEY}',
+                'voice': self.ai.voice,
+                'voice_model': self.ai.voice_model,
+                'max_tokens': self.ai.max_tokens,
+                'temperature': self.ai.temperature,
+            },
+            'mcp': {
+                'enabled': self.mcp.enabled,
+                'transport': self.mcp.transport,
+                'timeout': self.mcp.timeout,
+                'servers': [
+                    {
+                        'name': server.name,
+                        'command': server.command,
+                        'enabled': server.enabled,
+                        'env': server.env
+                    }
+                    for server in self.mcp.servers
+                ]
+            },
+            'wake_word': {
+                'phrase': self.wake_word.phrase,
+                'model_path': self.wake_word.model_path,
+            },
+            'timeout_seconds': self.timeout_seconds,
+            'debug': self.debug,
+        }
+        
+        with open(config_path, 'w') as f:
+            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
+    
+    @classmethod
+    def create_default_config(cls, config_path: str = "config.yaml") -> 'Config':
+        """
+        Create a default configuration file with all MCP servers.
+        
+        Args:
+            config_path: Path to create the config file
+            
+        Returns:
+            Config instance with defaults
+        """
+        config = cls()
+        
+        # Set default AI configuration
+        config.ai.api_key = "${OPENAI_API_KEY}"
+        
+        # Set default MCP servers
+        config.mcp.servers = [
+            MCPServerConfig(
+                name="weather",
+                command=["python", "-m", "src.mcp_servers.weather"]
+            ),
+            MCPServerConfig(
+                name="alarms",
+                command=["python", "-m", "src.mcp_servers.alarms"]
+            ),
+            MCPServerConfig(
+                name="train_times",
+                command=["python", "-m", "src.mcp_servers.train_times"]
+            ),
+        ]
+        
+        config.save(config_path)
+        return config
+
+
+# Convenience function for loading config
+def load_config(config_path: Optional[str] = None) -> Config:
+    """Load configuration from file or create default."""
+    return Config.load(config_path)

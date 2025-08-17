@@ -1,0 +1,1 @@
+"""Streaming/Watchmode MCP Server for PyHi voice assistant."""
