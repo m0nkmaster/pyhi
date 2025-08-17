@@ -48,8 +48,12 @@ class WakeWordDetector:
             if not access_key:
                 raise WakeWordError("PICOVOICE_API_KEY environment variable not set")
             
-            # Check model file exists
+            # Auto-detect model path if not specified
             model_path = self.config.model_path
+            if not model_path:
+                model_path = self._get_model_path()
+            
+            # Check model file exists
             if not os.path.exists(model_path):
                 raise WakeWordError(f"Wake word model not found at {model_path}")
             
@@ -63,6 +67,31 @@ class WakeWordDetector:
             
         except Exception as e:
             raise WakeWordError(f"Failed to initialize wake word detection: {e}")
+    
+    def _get_model_path(self) -> str:
+        """Auto-detect the correct model path based on platform."""
+        import platform
+        from pathlib import Path
+        
+        assets_dir = Path(__file__).parent / "assets"
+        system = platform.system().lower()
+        
+        if system == "darwin":  # macOS
+            model_file = "Hey-Chat_en_mac_v3_0_0.ppn"
+        elif system == "linux":
+            # Check if it's Raspberry Pi
+            try:
+                with open("/proc/cpuinfo", "r") as f:
+                    if "raspberry pi" in f.read().lower():
+                        model_file = "Hey-Chat_en_raspberry-pi_v3_0_0.ppn"
+                    else:
+                        model_file = "Hey-Chat_en_mac_v3_0_0.ppn"  # Use mac model for Linux
+            except:
+                model_file = "Hey-Chat_en_mac_v3_0_0.ppn"  # Fallback
+        else:
+            model_file = "Hey-Chat_en_mac_v3_0_0.ppn"  # Default fallback
+        
+        return str(assets_dir / model_file)
     
     def detect(self, audio_data: bytes) -> bool:
         """
@@ -78,17 +107,16 @@ class WakeWordDetector:
             # Convert bytes to int16 numpy array
             pcm = np.frombuffer(audio_data, dtype=np.int16)
             
-            # Process audio in frame-sized chunks
-            frame_length = self.porcupine.frame_length
+
             
-            for i in range(0, len(pcm) - frame_length + 1, frame_length):
-                frame = pcm[i:i + frame_length]
-                
-                if len(frame) == frame_length:
-                    keyword_index = self.porcupine.process(frame)
-                    if keyword_index >= 0:
-                        logging.info(f"Wake word '{self.config.phrase}' detected!")
-                        return True
+            # Porcupine expects exactly frame_length samples
+            if len(pcm) == self.porcupine.frame_length:
+                keyword_index = self.porcupine.process(pcm)
+                if keyword_index >= 0:
+                    logging.info(f"Wake word '{self.config.phrase}' detected!")
+                    return True
+            else:
+                logging.debug(f"Frame size mismatch: got {len(pcm)}, expected {self.porcupine.frame_length}")
             
             return False
             

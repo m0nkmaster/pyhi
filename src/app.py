@@ -172,9 +172,8 @@ class VoiceAssistant:
                 if self.is_awake:
                     if self._check_timeout():
                         # Play sleep sound before going to sleep
-                        if self.sleep_sound_path and os.path.exists(self.sleep_sound_path):
-                            logging.info("Playing sleep sound...")
-                            self.audio_player.play(self.sleep_sound_path, volume=1.0)
+                        logging.info("Playing sleep sound...")
+                        self.audio_handler.play_sleep_sound()
                         
                         logging.info("Going back to sleep. Say a trigger word to start a new conversation.")
                         print_with_emoji("Going back to sleep. Say a trigger word to start a new conversation.", "😴")
@@ -193,123 +192,50 @@ class VoiceAssistant:
                         continue
                 
                 # Process conversation when awake
-                logging.info("Recording user input...")
-                print_with_emoji("Recording user input...", "🎤")
-                
-                # Clear any previous audio buffer
-                self.audio_recorder.clear_buffer()
-                
-                # Record audio without resetting timeout
-                audio_data = self.audio_recorder.record_speech()
-                if not audio_data:  # No speech detected
-                    # Check for timeout without resetting last_interaction
-                    if self._check_timeout():
-                        continue
-                    continue
-                
-                # Save audio with consistent format
-                with wave.open("recording.wav", "wb") as wf:
-                    wf.setnchannels(self.audio_recorder.config.channels)
-                    wf.setsampwidth(2)  # 16-bit audio
-                    wf.setframerate(self.audio_recorder.config.sample_rate)
-                    wf.writeframes(audio_data)
-                logging.info("Audio recorded and saved")
-
-                # Convert speech to text using speech_recognition
                 try:
-                    with sr.AudioFile("recording.wav") as source:
-                        audio = self.recognizer.record(source)
-                        try:
-                            # Increase the recognition timeout and make it more strict
-                            transcript = self.recognizer.recognize_google(
-                                audio,
-                                show_all=False,  # Only return most confident result
-                            )
-                            if not transcript or len(transcript.strip()) == 0:
-                                logging.info("Empty transcript received")
-                                # Check for timeout without resetting last_interaction
-                                if self._check_timeout():
-                                    continue
-                                continue
-                                
-                            # Only reset the timeout counter when we get valid speech
-                            self.last_interaction = datetime.now()
-                            logging.info(f"You said: {transcript}")
-                            
-                            # Add message to conversation history immediately
-                            self.conversation_manager.add_user_message(transcript)
-
-                            # Start playing confirmation sound non-blocking while waiting for API
-                            confirmation_sound_path = get_sound_path(CONFIRMATION_SOUND)
-                            if os.path.exists(confirmation_sound_path):
-                                print(f"[{datetime.now()}] Starting confirmation sound...")
-                                self.audio_player.play(confirmation_sound_path, volume=0.5, block=False)
-                                print(f"[{datetime.now()}] Confirmation sound started")
-
-                            # Start API call immediately
-                            print(f"[{datetime.now()}] Starting API call...")
-                            logging.info("Getting assistant response...")
-                            
-                            # Print the message being sent to the API
-                            print(f"Message sent to API: {self.conversation_manager.get_conversation_history()}")
-
-                            # Make the API call
-                            response = self.ai_client.get_completion(
-                                self.conversation_manager.get_conversation_history()
-                            )
-                            logging.info(f"API Response: {response}")
-                            
-                            # Process the response and handle any function calls
-                            text_response = self.conversation_manager.process_assistant_response(response)
-                            
-                            # Skip TTS if response is empty
-                            if not text_response or len(text_response.strip()) == 0:
-                                logging.warning("Empty text response received from AI, skipping TTS")
-                                continue
-                            
-                            # Convert text response to speech
-                            logging.info("Converting response to speech...")
-                            print(f"[{datetime.now()}] Converting to speech...")
-                            audio_data = self.ai_client.text_to_speech(text_response)
-                            print(f"[{datetime.now()}] Got audio data, length: {len(audio_data)} bytes")
-                            
-                            if audio_data:
-                                # Only stop confirmation sound when we're ready to play the response
-                                print(f"[{datetime.now()}] Stopping confirmation sound...")
-                                self.audio_player.stop()
-                                print(f"[{datetime.now()}] Confirmation sound stopped")
-                                
-                                # Small pause to let the audio system stabilize
-                                time.sleep(0.2)
-                                
-                                # Play the response
-                                print(f"[{datetime.now()}] Starting TTS playback")
-                                self.audio_player.play(audio_data, block=True)
-                                print(f"[{datetime.now()}] TTS playback complete")
-                                
-                                # Small pause before ready sound
-                                time.sleep(0.2)
-                                
-                                # Play ready sound
-                                if self.ready_sound_path and os.path.exists(self.ready_sound_path):
-                                    print(f"[{datetime.now()}] Playing ready sound...")
-                                    self.audio_player.play(self.ready_sound_path, volume=1.0, block=True)
-                                    print(f"[{datetime.now()}] Ready sound complete")
-                                    print_with_emoji("Ready for your next question!", "👂")
-                                
-                                # Only update last interaction after all sounds are complete
-                                self.last_interaction = datetime.now()
-                            else:
-                                logging.error("Failed to get audio data from TTS")
-                                print(f"[{datetime.now()}] No audio data received from TTS")
-                        except sr.UnknownValueError:
-                            logging.error("Speech recognition failed: Could not understand audio")
-                            print_with_emoji("Sorry, I couldn't understand that. Could you try again?", "🤔")
-                        except sr.RequestError as e:
-                            logging.error(f"Speech recognition request failed: {e}")
-                            print_with_emoji("Speech recognition error. Please try again.", "❌")
+                    # Record speech using the audio handler
+                    transcript = asyncio.run(self.audio_handler.record_speech())
+                    
+                    if not transcript or len(transcript.strip()) == 0:
+                        logging.info("No speech detected")
+                        continue
+                    
+                    # Reset timeout on valid speech
+                    self.last_interaction = datetime.now()
+                    logging.info(f"You said: {transcript}")
+                    print_with_emoji(f"You said: {transcript}", "💬")
+                    
+                    # Play confirmation sound
+                    self.audio_handler.play_confirmation_sound()
+                    
+                    # Add to conversation and get response
+                    self.conversation_manager.add_user_message(transcript)
+                    response = self.ai_client.get_completion(
+                        self.conversation_manager.get_conversation_history()
+                    )
+                    
+                    # Process response
+                    text_response = self.conversation_manager.process_assistant_response(response)
+                    
+                    if text_response and len(text_response.strip()) > 0:
+                        logging.info(f"Assistant: {text_response}")
+                        print_with_emoji(f"Assistant: {text_response}", "🤖")
+                        
+                        # Convert to speech and play
+                        audio_data = self.ai_client.text_to_speech(text_response)
+                        if audio_data:
+                            self.audio_handler.play_audio_data(audio_data, "mp3")
+                        
+                        # Play ready sound
+                        self.audio_handler.play_ready_sound()
+                        print_with_emoji("Ready for your next question!", "👂")
+                    
+                    # Update interaction time
+                    self.last_interaction = datetime.now()
+                    
                 except Exception as e:
-                    logging.error(f"Processing error: {e}")
+                    logging.error(f"Error processing conversation: {e}")
+                    print_with_emoji("Sorry, I had trouble processing that. Please try again.", "❌")
         except Exception as e:
             logging.error(f"Error running voice assistant: {e}")
         finally:
@@ -317,31 +243,43 @@ class VoiceAssistant:
 
     def _listen_for_trigger_word(self) -> bool:
         """Listen for trigger word activation."""
-        # Only log at debug level for continuous operations
-        # logging.debug("Listening for trigger word...")
-        audio_data = self.audio_recorder.record_chunk()
-        
-        if not audio_data:
+        try:
+            # Initialize audio stream if needed
+            if not hasattr(self, '_direct_stream'):
+                self._init_direct_stream()
+            
+            # Read and process audio
+            data = self._direct_stream.read(512, exception_on_overflow=False)
+            pcm = __import__('numpy').frombuffer(data, dtype=__import__('numpy').int16)
+            
+            # Check for wake word
+            if self.word_detector.porcupine.process(pcm) >= 0:
+                logging.info("Wake word detected!")
+                print_with_emoji("Wake word detected!", "🎵")
+                
+                self.audio_handler.play_activation_sound()
+                print_with_emoji("How can I help you?", "🤔")
+                return True
+            
             return False
-        
-        # Check for trigger word
-        if self.word_detector.detect(audio_data):
-            try:
-                logging.info("Trigger word detected! Playing activation sound...")
-                print_with_emoji("Trigger word detected! Playing activation sound...", "🎵")
-                if self.activation_sound_path:
-                    self.audio_player.play(self.activation_sound_path)
-            except AudioPlayerError:
-                logging.error("Failed to play activation sound")
             
-            # Give a small pause after the activation sound
-            time.sleep(0.2)
-            
-            logging.info("Trigger word detected! How can I help you?")
-            print_with_emoji("Trigger word detected! How can I help you?", "🤔")
-            return True
+        except Exception as e:
+            logging.error(f"Error in wake word detection: {e}")
+            return False
+    
+    def _init_direct_stream(self):
+        """Initialize audio stream for wake word detection."""
+        import pyaudio
         
-        return False
+        pa = pyaudio.PyAudio()
+        self._direct_stream = pa.open(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=16000,
+            input=True,
+            frames_per_buffer=512
+        )
+        logging.info("Wake word detection initialized")
 
     def _check_timeout(self) -> bool:
         """Check if the session should timeout."""
@@ -387,8 +325,8 @@ class VoiceAssistant:
 
 def main():
     """Main entry point."""
-    config = AppConfig()
-    assistant = VoiceAssistant(config.words)
+    config = load_config()
+    assistant = VoiceAssistant(["hey chat"], config.timeout_seconds)
     assistant.run()
 
 if __name__ == "__main__":

@@ -39,6 +39,7 @@ class AudioHandler:
         self._recognizer = sr.Recognizer()
         self._microphone = None
         self._playback_lock = threading.Lock()
+
         
         # Initialize microphone
         self._setup_microphone()
@@ -57,6 +58,8 @@ class AudioHandler:
     def _setup_microphone(self):
         """Setup microphone for speech recognition."""
         try:
+    
+            
             # Use default microphone
             self._microphone = sr.Microphone(
                 sample_rate=self.config.sample_rate,
@@ -67,13 +70,17 @@ class AudioHandler:
             with self._microphone as source:
                 logging.info("Calibrating microphone for ambient noise...")
                 self._recognizer.adjust_for_ambient_noise(source, duration=1)
+
                 
         except Exception as e:
             raise AudioError(f"Failed to setup microphone: {e}")
     
-    def record_chunk(self) -> bytes:
+    def record_chunk(self, frame_size: int = 512) -> bytes:
         """
         Record a single audio chunk for wake word detection.
+        
+        Args:
+            frame_size: Number of samples to record
         
         Returns:
             Raw audio data as bytes
@@ -84,10 +91,10 @@ class AudioHandler:
                 channels=self.config.channels,
                 rate=self.config.sample_rate,
                 input=True,
-                frames_per_buffer=self.config.chunk_size
+                frames_per_buffer=frame_size
             )
             
-            data = stream.read(self.config.chunk_size, exception_on_overflow=False)
+            data = stream.read(frame_size, exception_on_overflow=False)
             stream.close()
             return data
             
