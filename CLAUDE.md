@@ -49,22 +49,20 @@ PyHi is a Python voice assistant that provides natural conversations with AI mod
 
 - **VoiceAssistant** (`src/app.py`): Main application orchestrating all components
 - **AIWrapper** (`src/conversation/ai_client.py`): Unified interface for OpenAI and Anthropic APIs
-- **FunctionManager** (`src/function_manager.py`): Dynamic function loading and execution system
+- **MCPManager** (`src/mcp_manager.py`): MCP server management and tool execution system
 - **Audio System**: Separate recording (`src/audio/recorder.py`) and playback (`src/audio/player.py`) modules
 - **Wake Word Detection**: Porcupine-based detection system (`src/word_detection/detector.py`)
 
-### Function System Architecture
+### MCP System Architecture
 
-Functions are organized in `src/functions/` with each function in its own directory containing:
-- `config.json`: OpenAI function definition for the AI model
-- `implementation.py`: Python implementation with required `execute()` function
+Tools are provided through MCP (Model Context Protocol) servers in `src/mcp_servers/` with each server providing specific functionality:
 
-Available functions:
+Available MCP servers:
 - `train_times/`: Rail departure information via LDBWS API
 - `weather/`: Weather data integration
-- `google-calendar/`: Google Calendar integration
+- `calendar/`: Google Calendar integration
 - `alarms/`: Audio alarm functionality
-- `watchmode/`: File system monitoring
+- `streaming/`: File system monitoring and streaming capabilities
 
 ### Configuration System
 

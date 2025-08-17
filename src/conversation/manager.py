@@ -50,13 +50,12 @@ class Conversation:
     system_prompt: str = "You are a helpful assistant. Please respond in English."
 
 class ChatConversationManager:
-    def __init__(self, system_prompt: Optional[str] = None, function_manager=None, mcp_manager=None, ai_client=None):
+    def __init__(self, system_prompt: Optional[str] = None, mcp_manager=None, ai_client=None):
         """
         Initialize the conversation manager.
         
         Args:
             system_prompt: Optional custom system prompt
-            function_manager: Optional legacy function manager for backward compatibility
             mcp_manager: Optional MCP manager for MCP-based function calling
             ai_client: AI client instance for making API calls
         """
@@ -93,8 +92,7 @@ class ChatConversationManager:
             self.conversation = Conversation(
                 system_prompt=formatted_prompt
             )
-            self.function_manager = function_manager  # Legacy support
-            self.mcp_manager = mcp_manager  # New MCP support
+            self.mcp_manager = mcp_manager
             self.ai_client = ai_client
             
             # Add system message at initialization
@@ -108,8 +106,7 @@ class ChatConversationManager:
             self.conversation = Conversation(
                 system_prompt=Conversation.system_prompt
             )
-            self.function_manager = function_manager  # Legacy support
-            self.mcp_manager = mcp_manager  # New MCP support
+            self.mcp_manager = mcp_manager
             self.ai_client = ai_client
             self.conversation.messages.append(
                 Message(role="system", content=self.conversation.system_prompt)
@@ -251,8 +248,8 @@ class ChatConversationManager:
             )
         )
         
-        # Process any tool calls using MCP manager or legacy function manager
-        if tool_calls and (self.mcp_manager or self.function_manager):
+        # Process any tool calls using MCP manager
+        if tool_calls and self.mcp_manager:
             for tool_call in tool_calls:
                 if not hasattr(tool_call, 'type') or tool_call.type != "function":
                     continue
@@ -271,32 +268,27 @@ class ChatConversationManager:
                         logging.error(f"Failed to parse function arguments: {e}")
                         continue
                     
-                    # Call the function using MCP or legacy function manager
-                    if self.mcp_manager:
-                        # Use async MCP call
-                        try:
-                            loop = asyncio.get_event_loop()
-                            function_response = loop.run_until_complete(
-                                self.mcp_manager.call_tool(function_name, arguments)
-                            )
-                            # Extract text content from MCP response
-                            if hasattr(function_response, 'content') and function_response.content:
-                                function_response = function_response.content[0].text if function_response.content else str(function_response)
-                            else:
-                                function_response = str(function_response)
-                        except RuntimeError:
-                            # No event loop running, create one
-                            function_response = asyncio.run(
-                                self.mcp_manager.call_tool(function_name, arguments)
-                            )
-                            # Extract text content from MCP response
-                            if hasattr(function_response, 'content') and function_response.content:
-                                function_response = function_response.content[0].text if function_response.content else str(function_response)
-                            else:
-                                function_response = str(function_response)
-                    else:
-                        # Use legacy function manager
-                        function_response = self.function_manager.call_function(function_name, **arguments)
+                    # Call the function using MCP manager
+                    try:
+                        loop = asyncio.get_event_loop()
+                        function_response = loop.run_until_complete(
+                            self.mcp_manager.call_tool(function_name, arguments)
+                        )
+                        # Extract text content from MCP response
+                        if hasattr(function_response, 'content') and function_response.content:
+                            function_response = function_response.content[0].text if function_response.content else str(function_response)
+                        else:
+                            function_response = str(function_response)
+                    except RuntimeError:
+                        # No event loop running, create one
+                        function_response = asyncio.run(
+                            self.mcp_manager.call_tool(function_name, arguments)
+                        )
+                        # Extract text content from MCP response
+                        if hasattr(function_response, 'content') and function_response.content:
+                            function_response = function_response.content[0].text if function_response.content else str(function_response)
+                        else:
+                            function_response = str(function_response)
                     
                     # Add the tool response message to conversation history
                     self.conversation.messages.append(

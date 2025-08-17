@@ -3,22 +3,21 @@
 from typing import Optional, List, Dict, Any
 import logging
 import asyncio
+import json
 from openai import OpenAI
 from anthropic import Anthropic
 
 class AIWrapper:
-    def __init__(self, config, function_manager=None, mcp_manager=None):
+    def __init__(self, config, mcp_manager=None):
         """
         Initialize the AI wrapper.
         
         Args:
             config: Configuration object with API keys and settings
-            function_manager: Optional legacy function manager for backward compatibility
             mcp_manager: Optional MCP manager for MCP-based function calling
         """
         self.config = config
-        self.function_manager = function_manager  # Legacy support
-        self.mcp_manager = mcp_manager  # New MCP support
+        self.mcp_manager = mcp_manager
         self.openai_client = OpenAI(api_key=config.api_key)
         self.anthropic_client = Anthropic(api_key=config.api_key)
         self.provider = config.provider
@@ -38,12 +37,10 @@ class AIWrapper:
     def _get_completion_openai(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion from OpenAI."""
         try:
-            # Get available tools from MCP manager or legacy function manager
+            # Get available tools from MCP manager
             tools = None
             if self.mcp_manager:
                 tools = self.mcp_manager.get_tools()
-            elif self.function_manager:
-                tools = self.function_manager.get_tools()
             
             # Validate tools format
             if tools:
@@ -96,24 +93,76 @@ class AIWrapper:
     def _get_completion_anthropic(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion from Anthropic's Claude."""
         try:
-            # Extract system message and user messages
+            # Get available tools from MCP manager
+            tools = None
+            if self.mcp_manager:
+                mcp_tools = self.mcp_manager.get_tools()
+                if mcp_tools:
+                    # Convert OpenAI tool format to Anthropic tool format
+                    tools = []
+                    for tool in mcp_tools:
+                        if isinstance(tool, dict) and 'function' in tool:
+                            anthropic_tool = {
+                                "name": tool['function']['name'],
+                                "description": tool['function']['description'],
+                                "input_schema": tool['function']['parameters']
+                            }
+                            tools.append(anthropic_tool)
+            
+            # Extract system message and prepare messages for Anthropic
             system_message = next((msg['content'] for msg in messages if msg['role'] == 'system'), None)
-            user_messages = [
-                {"role": "user", "content": msg['content']}
-                for msg in messages if msg['role'] == 'user'
-            ]
+            anthropic_messages = []
             
-            response = self.anthropic_client.messages.create(
-                model=self.model,
-                system=system_message,
-                messages=user_messages,
-                max_tokens=150
-            )
+            for msg in messages:
+                if msg['role'] == 'system':
+                    continue  # System message handled separately
+                elif msg['role'] in ['user', 'assistant']:
+                    anthropic_messages.append({
+                        "role": msg['role'],
+                        "content": msg['content']
+                    })
+                elif msg['role'] == 'tool':
+                    # Convert tool response to user message for Anthropic
+                    anthropic_messages.append({
+                        "role": "user",
+                        "content": f"Tool '{msg.get('name', 'unknown')}' returned: {msg['content']}"
+                    })
             
-            # Format response consistently
+            # Make API call
+            kwargs = {
+                "model": self.model,
+                "system": system_message,
+                "messages": anthropic_messages,
+                "max_tokens": 500
+            }
+            
+            if tools:
+                kwargs["tools"] = tools
+            
+            response = self.anthropic_client.messages.create(**kwargs)
+            
+            # Extract content and tool calls
+            content = ""
+            tool_calls = []
+            
+            for content_block in response.content:
+                if content_block.type == "text":
+                    content += content_block.text
+                elif content_block.type == "tool_use":
+                    # Convert Anthropic tool use to OpenAI tool_calls format for consistency
+                    tool_call = type('ToolCall', (), {
+                        'id': content_block.id,
+                        'type': 'function',
+                        'function': type('Function', (), {
+                            'name': content_block.name,
+                            'arguments': json.dumps(content_block.input) if not isinstance(content_block.input, str) else content_block.input
+                        })()
+                    })()
+                    tool_calls.append(tool_call)
+            
             return {
-                "content": response.content[0].text,
-                "tool_calls": None  # Anthropic doesn't support function calling yet
+                "content": content.strip() if content else None,
+                "tool_calls": tool_calls if tool_calls else None
             }
             
         except Exception as e:

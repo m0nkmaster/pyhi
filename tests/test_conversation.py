@@ -44,14 +44,18 @@ class TestAIWrapper:
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
         
+        mock_message = Mock()
+        mock_message.content = "OpenAI response"
+        mock_message.tool_calls = None  # Add hasattr check support
+        
         mock_response = Mock()
         mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = "OpenAI response"
-        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].message = mock_message
         mock_client.chat.completions.create.return_value = mock_response
         
         # Test
         config.ai.provider = "openai"
+        config.ai.api_key = "test-key"  # Set test API key
         wrapper = AIWrapper(config.ai)
         
         messages = [{"role": "user", "content": "Hello"}]
@@ -59,15 +63,21 @@ class TestAIWrapper:
         
         # Verify
         assert response["content"] == "OpenAI response"
+        assert response["tool_calls"] is None
         mock_client.chat.completions.create.assert_called_once()
 
 
     @patch('openai.OpenAI')
-    def test_get_completion_openai_with_tools(self, mock_openai_class, config):
-        """Test OpenAI completion with tool calls"""
+    def test_get_completion_openai_with_tools(self, mock_openai_class, config, mock_mcp_manager):
+        """Test OpenAI completion with MCP tools"""
         # Configure mock
         mock_client = Mock()
         mock_openai_class.return_value = mock_client
+        
+        # Mock MCP manager to provide tools
+        mock_mcp_manager.get_tools.return_value = [
+            {"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {}}}
+        ]
         
         mock_tool_call = Mock()
         mock_tool_call.id = "call_123"
@@ -77,21 +87,27 @@ class TestAIWrapper:
         
         mock_response = Mock()
         mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = "I'll help you with that"
-        mock_response.choices[0].message.tool_calls = [mock_tool_call]
+        mock_message = Mock()
+        mock_message.content = "I'll help you with that"
+        mock_message.tool_calls = [mock_tool_call]
+        
+        mock_response = Mock()
+        mock_response.choices = [Mock()]
+        mock_response.choices[0].message = mock_message
         mock_client.chat.completions.create.return_value = mock_response
         
-        # Test
+        # Test with MCP manager
         config.ai.provider = "openai"
-        wrapper = AIWrapper(config.ai)
+        config.ai.api_key = "test-key"
+        wrapper = AIWrapper(config.ai, mcp_manager=mock_mcp_manager)
         
         messages = [{"role": "user", "content": "What's the weather?"}]
-        tools = [{"type": "function", "function": {"name": "get_weather"}}]
-        response = wrapper.get_completion(messages, tools=tools)
+        response = wrapper.get_completion(messages)
         
         # Verify
         assert response["content"] == "I'll help you with that"
         assert response["tool_calls"] == [mock_tool_call]
+        mock_mcp_manager.get_tools.assert_called_once()
 
 
     @patch('anthropic.Anthropic')
@@ -101,12 +117,17 @@ class TestAIWrapper:
         mock_client = Mock()
         mock_anthropic_class.return_value = mock_client
         
+        mock_content_block = Mock()
+        mock_content_block.type = "text"
+        mock_content_block.text = "Anthropic response"
+        
         mock_response = Mock()
-        mock_response.content = [Mock(text="Anthropic response")]
+        mock_response.content = [mock_content_block]
         mock_client.messages.create.return_value = mock_response
         
         # Test
         config.ai.provider = "anthropic"
+        config.ai.api_key = "test-key"  # Set a test API key
         wrapper = AIWrapper(config.ai)
         
         messages = [
@@ -117,7 +138,51 @@ class TestAIWrapper:
         
         # Verify
         assert response["content"] == "Anthropic response"
+        assert response["tool_calls"] is None
         mock_client.messages.create.assert_called_once()
+
+
+    @patch('anthropic.Anthropic')
+    def test_get_completion_anthropic_with_tools(self, mock_anthropic_class, config, mock_mcp_manager):
+        """Test Anthropic completion with MCP tools"""
+        # Configure mock
+        mock_client = Mock()
+        mock_anthropic_class.return_value = mock_client
+        
+        # Mock MCP manager to provide tools
+        mock_mcp_manager.get_tools.return_value = [
+            {"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {}}}
+        ]
+        
+        # Mock tool use response
+        mock_text_block = Mock()
+        mock_text_block.type = "text"
+        mock_text_block.text = "I'll check the weather for you."
+        
+        mock_tool_block = Mock()
+        mock_tool_block.type = "tool_use"
+        mock_tool_block.id = "toolu_123"
+        mock_tool_block.name = "get_weather"
+        mock_tool_block.input = {"location": "NYC"}
+        
+        mock_response = Mock()
+        mock_response.content = [mock_text_block, mock_tool_block]
+        mock_client.messages.create.return_value = mock_response
+        
+        # Test
+        config.ai.provider = "anthropic"
+        config.ai.api_key = "test-key"
+        wrapper = AIWrapper(config.ai, mcp_manager=mock_mcp_manager)
+        
+        messages = [{"role": "user", "content": "What's the weather in NYC?"}]
+        response = wrapper.get_completion(messages)
+        
+        # Verify
+        assert response["content"] == "I'll check the weather for you."
+        assert response["tool_calls"] is not None
+        assert len(response["tool_calls"]) == 1
+        assert response["tool_calls"][0].function.name == "get_weather"
+        mock_mcp_manager.get_tools.assert_called_once()
 
 
     @patch('openai.OpenAI')
@@ -132,6 +197,7 @@ class TestAIWrapper:
         mock_client.audio.speech.create.return_value = mock_response
         
         # Test
+        config.ai.api_key = "test-key"
         wrapper = AIWrapper(config.ai)
         audio_data = wrapper.text_to_speech("Hello world")
         

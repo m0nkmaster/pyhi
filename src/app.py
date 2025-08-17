@@ -23,28 +23,10 @@ logging.basicConfig(
 
 from .conversation.ai_client import AIWrapper
 from .conversation.manager import ChatConversationManager
-from .function_manager import FunctionManager
 from .mcp_manager import MCPManager
-from .config import (
-    AppConfig,
-    AudioConfig,
-    AudioPlayerConfig,
-    AudioRecorderConfig,
-    ChatConfig,
-    WordDetectionConfig,
-    AudioDeviceConfig,
-    AIConfig
-)
-from .audio.player import PyAudioPlayer, AudioPlayerError
-from .audio.recorder import PyAudioRecorder, AudioRecorderError
-from .word_detection.detector import PorcupineWakeWordDetector
-from .config import (
-    ACTIVATION_SOUND,
-    CONFIRMATION_SOUND,
-    READY_SOUND,
-    SLEEP_SOUND,
-    get_sound_path,
-)
+from .config import load_config
+from .audio import AudioHandler, AudioError
+from .wake_word import WakeWordDetector, WakeWordError
 
 def print_with_emoji(message: str, emoji: str):
     print(f"{emoji} {message}")
@@ -61,38 +43,26 @@ class VoiceAssistant:
         # Only log essential initialization
         logging.info("API: Initializing voice assistant services")
         
-        self.audio_recorder = PyAudioRecorder(AudioConfig())
+        # Load unified configuration
+        self.config = load_config()
+        
+        self.audio_handler = AudioHandler(self.config)
         self.words = words
-        self.timeout_seconds = timeout_seconds or 10.0  # Set default timeout
+        self.timeout_seconds = timeout_seconds or self.config.timeout_seconds
 
-        # Initialize components
-        ai_config = AIConfig()
+        # Initialize MCP manager for tool handling
+        self.mcp_manager = MCPManager(self.config.mcp) if self.config.mcp.enabled else None
         
-        # Initialize MCP manager for modern tool handling
-        app_config = AppConfig()
-        if app_config.mcp_config.enabled:
-            self.mcp_manager = MCPManager(app_config.mcp_config)
-            # MCP initialization needs to be async, so we'll defer it
-            self.function_manager = None  # Disable legacy function manager
-        else:
-            # Fall back to legacy function manager if MCP is disabled
-            self.mcp_manager = None
-            self.function_manager = FunctionManager("src/functions")
-        
-        self.ai_client = AIWrapper(ai_config, self.function_manager, self.mcp_manager)
+        self.ai_client = AIWrapper(self.config.ai, mcp_manager=self.mcp_manager)
         self.conversation_manager = ChatConversationManager(
-            system_prompt=ChatConfig().system_prompt,
-            function_manager=self.function_manager,
+            system_prompt="You are a helpful voice assistant. Respond concisely and naturally.",
             mcp_manager=self.mcp_manager,
             ai_client=self.ai_client
         )
 
         try:
-            self.word_detector = PorcupineWakeWordDetector(
-                config=WordDetectionConfig(),
-                audio_config=AudioConfig()
-            )
-        except ValueError as e:
+            self.word_detector = WakeWordDetector(self.config)
+        except Exception as e:
             logging.error(f"Wake word detector initialization failed: {e}")
             raise
 
@@ -106,57 +76,21 @@ class VoiceAssistant:
         self.is_awake = False
         self.last_interaction = None
         self.response_queue = queue.Queue()
+    
+    def _get_sound_path(self, filename: str) -> str:
+        """Get the full path to a sound file in the assets directory."""
+        from pathlib import Path
+        assets_dir = Path(__file__).parent / "assets"
+        return str(assets_dir / filename)
 
     def setup_audio_system(self):
         """Set up the audio system."""
         print_with_emoji("Setting up audio system...", "🔊")
-        logging.info("Setting up audio system...")
-
-        # Initialize PyAudio
-        audio = pyaudio.PyAudio()
-
-        # Get default devices
-        default_input = audio.get_default_input_device_info()['index']
-        default_output = audio.get_default_output_device_info()['index']
-
-        # Log available input devices
-        print("\n🎤 Available Audio Input Devices")
-        logging.info("Available Audio Input Devices:")
-        for i in range(audio.get_device_count()):
-            device_info = audio.get_device_info_by_index(i)
-            if device_info['maxInputChannels'] > 0:
-                # Add tick emoji if this is the default or selected device
-                is_selected = (i == default_input)
-                prefix = "✅ " if is_selected else "   "
-                print(f"{prefix}Index {i}: {device_info['name']}")
-                logging.info(f"Input Device - Index {i}: {device_info['name']}{' (Selected)' if is_selected else ''}")
-
-        print()  # Add a blank line for better readability
-
-        # Initialize audio player with list_devices_on_start=False since we'll list devices ourselves
-        self.audio_player = PyAudioPlayer(
-            on_error=lambda e: logging.error(f"Audio playback error: {e}"),
-            config=AudioPlayerConfig(),
-            device_config=AudioDeviceConfig(list_devices_on_start=False)
-        )
-
-        # Log available output devices
-        print("🔊 Available Audio Output Devices")
-        logging.info("Available Audio Output Devices:")
-        for i in range(audio.get_device_count()):
-            device_info = audio.get_device_info_by_index(i)
-            if device_info['maxOutputChannels'] > 0:
-                # Add tick emoji if this is the default or selected device
-                is_selected = (i == default_output or i == self.audio_player.config.output_device_index)
-                prefix = "✅ " if is_selected else "   "
-                print(f"{prefix}Index {i}: {device_info['name']}")
-                logging.info(f"Output Device - Index {i}: {device_info['name']}{' (Selected)' if is_selected else ''}")
-
-        print()  # Add a blank line for better readability
+        logging.info("Audio system initialized with unified AudioHandler")
 
     def load_activation_sound(self):
         """Load the activation sound file."""
-        self.activation_sound_path = get_sound_path(ACTIVATION_SOUND)
+        self.activation_sound_path = self._get_sound_path(self.config.audio.activation_sound)
         if not os.path.exists(self.activation_sound_path):
             logging.warning(f"Activation sound file not found at {self.activation_sound_path}")
             print_with_emoji(f"Warning: Activation sound file not found at {self.activation_sound_path}", "⚠️")
@@ -165,7 +99,7 @@ class VoiceAssistant:
 
     def load_confirmation_sound(self):
         """Load the confirmation sound file."""
-        self.confirmation_sound_path = get_sound_path(CONFIRMATION_SOUND)
+        self.confirmation_sound_path = self._get_sound_path(self.config.audio.confirmation_sound)
         if not os.path.exists(self.confirmation_sound_path):
             logging.warning(f"Confirmation sound file not found at {self.confirmation_sound_path}")
             print_with_emoji(f"Warning: Confirmation sound file not found at {self.confirmation_sound_path}", "⚠️")
@@ -174,7 +108,7 @@ class VoiceAssistant:
 
     def load_ready_sound(self):
         """Load the ready sound file."""
-        self.ready_sound_path = get_sound_path(READY_SOUND)
+        self.ready_sound_path = self._get_sound_path(self.config.audio.ready_sound)
         if not os.path.exists(self.ready_sound_path):
             logging.warning(f"Ready sound file not found at {self.ready_sound_path}")
             print_with_emoji(f"Warning: Ready sound file not found at {self.ready_sound_path}", "⚠️")
@@ -183,7 +117,7 @@ class VoiceAssistant:
 
     def load_sleep_sound(self):
         """Load the sleep mode sound file."""
-        self.sleep_sound_path = get_sound_path(SLEEP_SOUND)
+        self.sleep_sound_path = self._get_sound_path(self.config.audio.sleep_sound)
         if not os.path.exists(self.sleep_sound_path):
             logging.warning(f"Sleep sound file not found at {self.sleep_sound_path}")
             print_with_emoji(f"Warning: Sleep sound file not found at {self.sleep_sound_path}", "⚠️")

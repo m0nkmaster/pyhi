@@ -16,7 +16,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import io
 
-from config import Config, AudioConfig
+from .config import Config, AudioConfig
 
 
 class AudioError(Exception):

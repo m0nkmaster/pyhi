@@ -1,6 +1,5 @@
 """
 MCP Manager for handling MCP server connections and tool management.
-Replaces the original FunctionManager with MCP-based functionality.
 """
 
 import asyncio
@@ -299,28 +298,3 @@ class MCPManager:
                 self.logger.error(f"Error during MCPManager cleanup: {e}")
 
 
-# Compatibility functions for migration from FunctionManager
-class MCPManagerCompat(MCPManager):
-    """
-    Compatibility wrapper to ease migration from FunctionManager.
-    Provides the same interface as the original FunctionManager.
-    """
-    
-    def call_function(self, function_name: str, **params) -> Any:
-        """
-        Synchronous wrapper for call_tool to match FunctionManager interface.
-        
-        Args:
-            function_name: Name of the function to call
-            **params: Parameters to pass to the function
-            
-        Returns:
-            Result of the function call
-        """
-        # This requires running in an async context
-        try:
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(self.call_tool(function_name, params))
-        except RuntimeError:
-            # No event loop running, create one
-            return asyncio.run(self.call_tool(function_name, params))

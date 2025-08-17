@@ -66,9 +66,10 @@ def voice_assistant(config, mock_audio_handler, mock_wake_word_detector,
          patch('src.app.WakeWordDetector', return_value=mock_wake_word_detector), \
          patch('src.app.ChatConversationManager', return_value=mock_conversation_manager), \
          patch('src.app.AIWrapper', return_value=mock_ai_client), \
-         patch('src.app.MCPManager', return_value=mock_mcp_manager):
+         patch('src.app.MCPManager', return_value=mock_mcp_manager), \
+         patch('src.app.load_config', return_value=config):
         
-        assistant = VoiceAssistant(config_path=None)
+        assistant = VoiceAssistant(words=['hey', 'chat'], timeout_seconds=10.0)
         return assistant
 
 
@@ -78,9 +79,11 @@ class TestVoiceAssistant:
         assert voice_assistant.config is not None
         assert voice_assistant.running is True
         assert voice_assistant.audio_handler is not None
-        assert voice_assistant.wake_word_detector is not None
+        assert voice_assistant.word_detector is not None
         assert voice_assistant.conversation_manager is not None
         assert voice_assistant.ai_client is not None
+        assert voice_assistant.words == ['hey', 'chat']
+        assert voice_assistant.timeout_seconds == 10.0
 
 
     @pytest.mark.asyncio
