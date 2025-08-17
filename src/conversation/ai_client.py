@@ -1,21 +1,24 @@
-"""OpenAI and Anthropic API client wrapper."""
+"""OpenAI and Anthropic API client wrapper with MCP support."""
 
 from typing import Optional, List, Dict, Any
 import logging
+import asyncio
 from openai import OpenAI
 from anthropic import Anthropic
 
 class AIWrapper:
-    def __init__(self, config, function_manager=None):
+    def __init__(self, config, function_manager=None, mcp_manager=None):
         """
         Initialize the AI wrapper.
         
         Args:
             config: Configuration object with API keys and settings
-            function_manager: Optional function manager for function calling
+            function_manager: Optional legacy function manager for backward compatibility
+            mcp_manager: Optional MCP manager for MCP-based function calling
         """
         self.config = config
-        self.function_manager = function_manager
+        self.function_manager = function_manager  # Legacy support
+        self.mcp_manager = mcp_manager  # New MCP support
         self.openai_client = OpenAI(api_key=config.openai_api_key)
         self.anthropic_client = Anthropic(api_key=config.anthropic_api_key)
         self.chat_provider = config.chat_provider
@@ -35,8 +38,12 @@ class AIWrapper:
     def _get_completion_openai(self, messages: List[dict]) -> Dict[str, Any]:
         """Get completion from OpenAI."""
         try:
-            # Get available tools from function manager
-            tools = self.function_manager.get_tools() if self.function_manager else None
+            # Get available tools from MCP manager or legacy function manager
+            tools = None
+            if self.mcp_manager:
+                tools = self.mcp_manager.get_tools()
+            elif self.function_manager:
+                tools = self.function_manager.get_tools()
             
             # Validate tools format
             if tools:

@@ -87,21 +87,23 @@ class PyAudioRecorder:
             silence_chunks = 0
             speech_detected = False
             
-            # Calibrate silence threshold from ambient noise
+            # Calibrate silence threshold from ambient noise (faster)
             ambient_levels = []
-            for _ in range(5):  # Sample ambient noise for 5 chunks
+            for _ in range(2):  # Sample ambient noise for only 2 chunks (faster)
                 data = self.stream.read(self.config.chunk_size, exception_on_overflow=False)
                 if data:
                     audio_data = np.frombuffer(data, dtype=np.int16)
                     ambient_levels.append(np.abs(audio_data).mean())
             
-            # Set threshold to 2x the average ambient level
-            silence_threshold = max(300, np.mean(ambient_levels) * 2 if ambient_levels else 300)
+            # Set threshold lower for better sensitivity
+            base_threshold = np.mean(ambient_levels) if ambient_levels else 200
+            silence_threshold = max(200, base_threshold * 1.5)  # Lower multiplier and minimum threshold
+            logging.info(f"Speech detection threshold set to: {silence_threshold:.1f}")
             
             # Calculate timing parameters
             chunks_per_second = self.config.sample_rate / self.config.chunk_size
             max_silence_chunks = round(chunks_per_second * self.recorder_config.response_silence_threshold)
-            max_wait_chunks = round(chunks_per_second * 2)  # Wait up to 2 seconds for speech to start
+            max_wait_chunks = round(chunks_per_second * 5)  # Wait up to 5 seconds for speech to start
             
             # First wait for speech to begin
             for _ in range(max_wait_chunks):
@@ -113,7 +115,12 @@ class PyAudioRecorder:
                     audio_data = np.frombuffer(data, dtype=np.int16)
                     current_volume = np.abs(audio_data).mean()
                     
+                    # Debug: Log volume levels occasionally
+                    if _ % 8 == 0:  # Log every 8th chunk to avoid spam
+                        logging.debug(f"Volume: {current_volume:.1f}, Threshold: {silence_threshold:.1f}")
+                    
                     if current_volume > silence_threshold:
+                        logging.info(f"Initial speech detected! Volume: {current_volume:.1f} > {silence_threshold:.1f}")
                         frames.append(data)
                         speech_detected = True
                         break
@@ -150,10 +157,13 @@ class PyAudioRecorder:
                         continue
                     raise
             
-            # Only return if we captured enough frames
-            if len(frames) > max_wait_chunks:  # Ensure we have more than just the initial detection
+            # Return if we captured any speech frames
+            if len(frames) > 5:  # Ensure we have at least a few frames of speech
+                logging.info(f"Speech recording complete: {len(frames)} frames captured")
                 return b''.join(frames)
-            return None
+            else:
+                logging.info(f"Recording too short: only {len(frames)} frames")
+                return None
             
         except Exception as e:
             raise AudioRecorderError(f"Error recording audio: {e}")

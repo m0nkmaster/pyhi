@@ -9,6 +9,7 @@ import speech_recognition as sr
 import queue
 import signal
 import sys
+import asyncio
 
 # Set up logging configuration
 logging.basicConfig(
@@ -23,6 +24,7 @@ logging.basicConfig(
 from .conversation.ai_client import AIWrapper
 from .conversation.manager import ChatConversationManager
 from .function_manager import FunctionManager
+from .mcp_manager import MCPManager
 from .config import (
     AppConfig,
     AudioConfig,
@@ -65,11 +67,23 @@ class VoiceAssistant:
 
         # Initialize components
         ai_config = AIConfig()
-        self.function_manager = FunctionManager("src/functions")
-        self.ai_client = AIWrapper(ai_config, self.function_manager)
+        
+        # Initialize MCP manager for modern tool handling
+        app_config = AppConfig()
+        if app_config.mcp_config.enabled:
+            self.mcp_manager = MCPManager(app_config.mcp_config)
+            # MCP initialization needs to be async, so we'll defer it
+            self.function_manager = None  # Disable legacy function manager
+        else:
+            # Fall back to legacy function manager if MCP is disabled
+            self.mcp_manager = None
+            self.function_manager = FunctionManager("src/functions")
+        
+        self.ai_client = AIWrapper(ai_config, self.function_manager, self.mcp_manager)
         self.conversation_manager = ChatConversationManager(
             system_prompt=ChatConfig().system_prompt,
             function_manager=self.function_manager,
+            mcp_manager=self.mcp_manager,
             ai_client=self.ai_client
         )
 
@@ -201,6 +215,19 @@ class VoiceAssistant:
 
     def run(self):
         """Run the voice assistant main loop."""
+        # Initialize MCP if enabled
+        if self.mcp_manager:
+            logging.info("Initializing MCP servers...")
+            print_with_emoji("Initializing MCP servers...", "🔧")
+            try:
+                # Initialize MCP manager asynchronously
+                asyncio.run(self.mcp_manager.initialize())
+                logging.info("MCP servers initialized successfully")
+                print_with_emoji("MCP servers ready!", "✅")
+            except Exception as e:
+                logging.error(f"Failed to initialize MCP servers: {e}")
+                print_with_emoji(f"Warning: MCP initialization failed, continuing with limited functionality", "⚠️")
+        
         logging.info("Voice Assistant is ready! Say one of the trigger words to begin...")
         print_with_emoji("Voice Assistant is ready! Say one of the trigger words to begin...", "🚀")
         logging.info("Press Ctrl+C to quit")
@@ -410,8 +437,17 @@ class VoiceAssistant:
         sys.exit(0)
 
     def _cleanup(self):
-        """Clean up temporary files."""
-        logging.info("Cleaning up temporary files...")
+        """Clean up temporary files and MCP connections."""
+        logging.info("Cleaning up temporary files and connections...")
+        
+        # Cleanup MCP servers
+        if self.mcp_manager:
+            try:
+                asyncio.run(self.mcp_manager.shutdown())
+            except Exception as e:
+                logging.error(f"Error shutting down MCP servers: {e}")
+        
+        # Cleanup temporary files
         try:
             if os.path.exists("recording.wav"):
                 os.remove("recording.wav")

@@ -14,4 +14,6 @@ google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
 zeep>=4.2.1
-requests
+mcp[cli]>=1.0.0
+pydantic>=2.0.0
+httpx>=0.25.0

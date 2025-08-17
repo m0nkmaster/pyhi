@@ -1,0 +1,1 @@
+"""Weather MCP server for PyHi."""

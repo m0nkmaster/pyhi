@@ -3,7 +3,7 @@ import pyaudio
 import os
 from dotenv import load_dotenv
 import platform
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 # Load environment variables from .env file
 load_dotenv()
@@ -134,9 +134,53 @@ class AIConfig:
     temperature: float = 0.7
 
 @dataclass
+class MCPServerConfig:
+    """Configuration for a single MCP server."""
+    name: str
+    executable: str  # Path to server executable
+    args: List[str] = field(default_factory=list)
+    env: Dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
+
+@dataclass
+class MCPConfig:
+    """Configuration for MCP (Model Context Protocol) integration."""
+    enabled: bool = False  # Temporarily disabled for testing
+    transport: str = "stdio"  # "stdio" or "http"
+    timeout: int = 30
+    auto_start: bool = True
+    servers: List[MCPServerConfig] = field(default_factory=lambda: [
+        MCPServerConfig(
+            name="weather",
+            executable="python",
+            args=["-m", "src.mcp_servers.weather"],
+            env={}
+        ),
+        MCPServerConfig(
+            name="calendar",
+            executable="python", 
+            args=["-m", "src.mcp_servers.calendar"],
+            env={}
+        ),
+        MCPServerConfig(
+            name="alarms",
+            executable="python",
+            args=["-m", "src.mcp_servers.alarms"],
+            env={}
+        ),
+        MCPServerConfig(
+            name="train_times",
+            executable="python",
+            args=["-m", "src.mcp_servers.train_times"],
+            env={}
+        ),
+    ])
+
+@dataclass
 class AppConfig:
     timeout_seconds: float = 10.0
     words: list[str] | None = None
     temp_recording_path: str = "recording.wav"
     temp_response_path: str = "response.mp3"
     ai_config: AIConfig = field(default_factory=AIConfig)
+    mcp_config: MCPConfig = field(default_factory=MCPConfig)
