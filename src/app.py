@@ -46,7 +46,7 @@ class VoiceAssistant:
         # Load unified configuration
         self.config = load_config()
         
-        self.audio_handler = AudioHandler(self.config)
+        self.audio_handler = AudioHandler(self.config.audio)
         self.words = words
         self.timeout_seconds = timeout_seconds or self.config.timeout_seconds
 
@@ -362,11 +362,6 @@ class VoiceAssistant:
         """Handle termination signals."""
         logging.info("Signal received, stopping VoiceAssistant...")
         self.running = False
-        if self.audio_recorder and self.audio_recorder.stream:
-            self.audio_recorder.stream.stop_stream()
-            self.audio_recorder.stream.close()
-        if hasattr(self.audio_recorder, 'audio'):
-            self.audio_recorder.audio.terminate()
         self._cleanup()
         sys.exit(0)
 

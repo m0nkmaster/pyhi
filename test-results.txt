@@ -1,0 +1,26 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.7, pytest-8.3.4, pluggy-1.5.0
+rootdir: /Users/robmacdonald/Documents/projects/pyhi
+configfile: pyproject.toml
+plugins: cov-6.0.0, asyncio-0.25.0, anyio-4.7.0, mock-3.14.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=function
+collected 54 items
+
+tests/test_app.py .....                                                  [  9%]
+tests/test_audio.py .......                                              [ 22%]
+tests/test_config.py .................                                   [ 53%]
+tests/test_conversation.py ..........                                    [ 72%]
+tests/test_mcp.py ......                                                 [ 83%]
+tests/test_wake_word.py .........                                        [100%]
+
+=============================== warnings summary ===============================
+../../../.pyenv/versions/3.11.7/lib/python3.11/site-packages/speech_recognition/__init__.py:7
+  /Users/robmacdonald/.pyenv/versions/3.11.7/lib/python3.11/site-packages/speech_recognition/__init__.py:7: DeprecationWarning: 'aifc' is deprecated and slated for removal in Python 3.13
+    import aifc
+
+../../../.pyenv/versions/3.11.7/lib/python3.11/site-packages/speech_recognition/__init__.py:8
+  /Users/robmacdonald/.pyenv/versions/3.11.7/lib/python3.11/site-packages/speech_recognition/__init__.py:8: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
+    import audioop
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 54 passed, 2 warnings in 0.52s ========================
