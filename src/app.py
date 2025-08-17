@@ -6,7 +6,6 @@ import pyaudio
 import wave
 import logging
 import speech_recognition as sr
-import threading
 import queue
 import signal
 import sys
